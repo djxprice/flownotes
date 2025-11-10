@@ -43,6 +43,7 @@ Notes:
 - Click “Note+” on the Flow toolbar to open a small popout with a text area.
 - The popout is draggable and can be closed (×). It appears near the toolbar and can be repositioned.
 - “Save & Close” persists the note to Salesforce as a `FlowNote__c` record (fields include `FlowId__c`, `NoteText__c`, `PosTop__c`, `PosLeft__c`, and `CanvasUrl__c`), then closes the popout.
+  - If your profile lacks Field-Level Security to create/update certain fields, the extension will still create the record and then attempt a PATCH for fields that are updateable. Ask an admin to grant create/update FLS on these fields for full functionality.
 
 
 ### 2) Configure the Extension

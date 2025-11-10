@@ -389,26 +389,32 @@ function parseFlowIdFromUrl(href) {
 }
 
 async function createFlowNote(fields) {
-	// Describe object to filter to valid creatable fields (handles orgs missing fields)
-	const allowed = await getCreatableFieldSet("FlowNote__c");
-	const filtered = {};
-	for (const [k, v] of Object.entries(fields || {})) {
-		if (allowed.has(k)) filtered[k] = v;
+	// Describe object to filter to valid fields based on FLS
+	const access = await getFieldAccess("FlowNote__c");
+	const desired = fields || {};
+	const createPayload = {};
+	const deferredUpdate = {};
+	for (const [k, v] of Object.entries(desired)) {
+		if (access.createable.has(k)) {
+			createPayload[k] = v;
+		} else if (access.updateable.has(k)) {
+			deferredUpdate[k] = v;
+		}
 	}
-	// Route via background proxy to call the org instance with SID Authorization
-	const res = await chrome.runtime.sendMessage({
+	// Create
+	const createRes = await chrome.runtime.sendMessage({
 		type: "proxy",
 		path: "/services/data/v60.0/sobjects/FlowNote__c",
 		method: "POST",
-		body: filtered
+		body: createPayload
 	});
-	if (!res?.ok) {
-		const detail = (res?.body || res?.error || "").toString();
-		// Fallback: remove any field names referenced in INVALID_FIELD errors and retry once
+	if (!createRes?.ok) {
+		const detail = (createRes?.body || createRes?.error || "").toString();
+		// Fallback: remove any invalid fields and retry once
 		const missing = extractMissingFieldNames(detail);
 		if (missing.length > 0) {
 			const withoutMissing = {};
-			for (const [k, v] of Object.entries(filtered)) {
+			for (const [k, v] of Object.entries(createPayload)) {
 				if (!missing.includes(k)) withoutMissing[k] = v;
 			}
 			const retry = await chrome.runtime.sendMessage({
@@ -417,18 +423,20 @@ async function createFlowNote(fields) {
 				method: "POST",
 				body: withoutMissing
 			});
-			if (retry?.ok) {
-				console.warn("[FlowNotes] Saved after removing missing fields:", missing.join(", "));
-				try { return JSON.parse(retry.body || "{}"); } catch { return { ok: true }; }
+			if (!retry?.ok) {
+				throw new Error(`HTTP ${retry?.status || ""} ${retry?.body || retry?.error || ""}`.trim());
 			}
+			let created = {};
+			try { created = JSON.parse(retry.body || "{}"); } catch {}
+			await maybePatchDeferred(created?.id, deferredUpdate, access);
+			return created;
 		}
-		throw new Error(`HTTP ${res?.status || ""} ${detail}`.trim());
+		throw new Error(`HTTP ${createRes?.status || ""} ${detail}`.trim());
 	}
-	try {
-		return JSON.parse(res.body || "{}");
-	} catch {
-		return { ok: true };
-	}
+	let created = {};
+	try { created = JSON.parse(createRes.body || "{}"); } catch {}
+	await maybePatchDeferred(created?.id, deferredUpdate, access);
+	return created;
 }
 
 function extractMissingFieldNames(detail) {
@@ -449,29 +457,48 @@ function extractMissingFieldNames(detail) {
 }
 
 const describeCache = new Map();
-async function getCreatableFieldSet(sobject) {
+async function getFieldAccess(sobject) {
 	if (describeCache.has(sobject)) return describeCache.get(sobject);
 	const res = await chrome.runtime.sendMessage({
 		type: "proxy",
 		path: `/services/data/v60.0/sobjects/${encodeURIComponent(sobject)}/describe`,
 		method: "GET"
 	});
-	const set = new Set();
+	const access = { createable: new Set(), updateable: new Set() };
 	if (res?.ok) {
 		try {
 			const desc = JSON.parse(res.body || "{}");
 			const fields = Array.isArray(desc?.fields) ? desc.fields : [];
 			for (const f of fields) {
-				if (f?.createable) set.add(f.name);
+				if (f?.createable) access.createable.add(f.name);
+				if (f?.updateable) access.updateable.add(f.name);
 			}
 		} catch {
 			// ignore
 		}
 	}
 	// Always allow FlowId__c in case describe failed but it's standard in our package
-	set.add("FlowId__c");
-	describeCache.set(sobject, set);
-	return set;
+	access.createable.add("FlowId__c");
+	describeCache.set(sobject, access);
+	return access;
+}
+
+async function maybePatchDeferred(recordId, deferredUpdate, access) {
+	if (!recordId) return;
+	const updatePayload = {};
+	for (const [k, v] of Object.entries(deferredUpdate || {})) {
+		if (access.updateable.has(k)) updatePayload[k] = v;
+	}
+	if (Object.keys(updatePayload).length === 0) return;
+	const res = await chrome.runtime.sendMessage({
+		type: "proxy",
+		path: `/services/data/v60.0/sobjects/FlowNote__c/${encodeURIComponent(recordId)}`,
+		method: "PATCH",
+		body: updatePayload
+	});
+	if (!res?.ok) {
+		console.warn("[FlowNotes] Patch deferred fields failed", res?.status, res?.body || res?.error);
+	}
 }
 
 // Initialize in all frames (Flow Builder may render within an inner frame)
