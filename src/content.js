@@ -204,8 +204,11 @@ function makeDraggable(moveEl) {
 		if (moveEl.classList.contains(DISPLAY_NOTE_CLASS)) {
 			const rect = moveEl.getBoundingClientRect();
 			const canvasRect = getCanvasRect();
-			moveEl.dataset.canvasTop = String(Math.round(rect.top - canvasRect.top));
-			moveEl.dataset.canvasLeft = String(Math.round(rect.left - canvasRect.left));
+			// Invert scaling if applied
+			const scaleX = (baselineCanvasRect && canvasRect.width) ? (canvasRect.width / (baselineCanvasRect.width || canvasRect.width)) : 1;
+			const scaleY = (baselineCanvasRect && canvasRect.height) ? (canvasRect.height / (baselineCanvasRect.height || canvasRect.height)) : 1;
+			moveEl.dataset.canvasTop = String(Math.round((rect.top - canvasRect.top) / (scaleY || 1)));
+			moveEl.dataset.canvasLeft = String(Math.round((rect.left - canvasRect.left) / (scaleX || 1)));
 		}
 	}
 	moveEl.addEventListener("mousedown", onMouseDown);
@@ -531,6 +534,7 @@ async function maybePatchDeferred(recordId, deferredUpdate, access) {
 // Display notes for current flow
 // -------------------------------------------------------------------
 const DISPLAY_NOTE_CLASS = "flownotes-note-display";
+let baselineCanvasRect = null;
 
 async function displayNotesForCurrentFlow() {
 	try {
@@ -541,6 +545,8 @@ async function displayNotesForCurrentFlow() {
 			return;
 		}
 		clearDisplayedNotes();
+		// Set baseline canvas rect for scaling
+		baselineCanvasRect = getCanvasRect();
 		const soql = `SELECT Id, NoteText__c, PosTop__c, PosLeft__c, CanvasUrl__c FROM FlowNote__c WHERE FlowId__c = '${escapeSoqlLiteral(flowId)}' ORDER BY CreatedDate ASC`;
 		const res = await chrome.runtime.sendMessage({
 			type: "proxy",
@@ -672,6 +678,9 @@ function getCanvasRect() {
 let lastCanvasRectKey = "";
 function layoutDisplayedNotes() {
 	const rect = getCanvasRect();
+	if (!baselineCanvasRect) baselineCanvasRect = rect;
+	const scaleX = rect.width && baselineCanvasRect.width ? rect.width / baselineCanvasRect.width : 1;
+	const scaleY = rect.height && baselineCanvasRect.height ? rect.height / baselineCanvasRect.height : 1;
 	const key = `${Math.round(rect.top)}|${Math.round(rect.left)}|${Math.round(rect.width)}|${Math.round(rect.height)}`;
 	lastCanvasRectKey = key;
 	const doc = getTargetDocument();
@@ -681,8 +690,8 @@ function layoutDisplayedNotes() {
 		if (el.dataset.dragging === "1") continue;
 		const savedTop = Number(el.dataset.canvasTop || 0);
 		const savedLeft = Number(el.dataset.canvasLeft || 0);
-		const anchorTop = rect.top + savedTop;
-		const anchorLeft = rect.left + savedLeft;
+		const anchorTop = rect.top + savedTop * scaleY;
+		const anchorLeft = rect.left + savedLeft * scaleX;
 		const inView =
 			anchorTop >= 0 &&
 			anchorLeft >= 0 &&
@@ -693,6 +702,8 @@ function layoutDisplayedNotes() {
 			continue;
 		}
 		el.style.display = "";
+		el.style.transformOrigin = "top left";
+		el.style.transform = `scale(${scaleX}, ${scaleY})`;
 		el.style.top = `${Math.round(anchorTop)}px`;
 		el.style.left = `${Math.round(anchorLeft)}px`;
 	}
