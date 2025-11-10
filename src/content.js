@@ -666,12 +666,27 @@ function escapeSoqlLiteral(value) {
 }
 
 function getCanvasSvg() {
-	const doc = getTargetDocument();
-	const svgs = Array.from(doc.querySelectorAll("svg"));
-	if (svgs.length === 0) return null;
+	// Search for the largest SVG in this window and any same-origin frames
+	function collectSvgs(win, out) {
+		try {
+			const doc = win.document;
+			out.push(...doc.querySelectorAll("svg"));
+			const frames = Array.from(doc.querySelectorAll("iframe, frame"));
+			for (const fr of frames) {
+				try {
+					if (fr.contentWindow && fr.contentWindow.location.host === win.location.host) {
+						collectSvgs(fr.contentWindow, out);
+					}
+				} catch {} // ignore cross-origin
+			}
+		} catch {}
+	}
+	const all = [];
+	collectSvgs(window, all);
+	if (all.length === 0) return null;
 	let best = null;
 	let bestArea = 0;
-	for (const svg of svgs) {
+	for (const svg of all) {
 		const r = svg.getBoundingClientRect();
 		const area = Math.max(0, r.width) * Math.max(0, r.height);
 		if (area > bestArea) {
@@ -679,30 +694,18 @@ function getCanvasSvg() {
 			best = svg;
 		}
 	}
-	return best || svgs[0];
+	return best || all[0];
 }
 
 function getCanvasRect() {
-	const doc = getTargetDocument();
-	const svgs = Array.from(doc.querySelectorAll("svg"));
-	if (svgs.length === 0) {
+	const svg = getCanvasSvg();
+	if (!svg) {
 		// Fallback to viewport with some padding
 		const vw = window.innerWidth || 1200;
 		const vh = window.innerHeight || 800;
 		return { top: 0, left: 0, width: vw, height: vh };
 	}
-	// Choose the largest visible SVG as the canvas
-	let best = null;
-	let bestArea = 0;
-	for (const svg of svgs) {
-		const r = svg.getBoundingClientRect();
-		const area = Math.max(0, r.width) * Math.max(0, r.height);
-		if (area > bestArea) {
-			bestArea = area;
-			best = r;
-		}
-	}
-	return best || svgs[0].getBoundingClientRect();
+	return svg.getBoundingClientRect();
 }
 
 // Reposition displayed notes to stay anchored to the canvas rect
