@@ -48,6 +48,8 @@ Notes:
 ### Display notes
 - Click “Display” on the Flow toolbar to render all notes (`FlowNote__c`) for the current canvas’s `flowId`.
 - Notes are shown as sticky cards at their saved positions; you can drag and close individual cards.
+- Notes auto-hide when their anchor is off-screen and reappear when it returns.
+- Notes scale with the Flow canvas zoom; positions are stored relative to the canvas for stability across panning/zooming.
 
 ### 2) Configure the Extension
 No Salesforce configuration is required. Ensure the extension has:

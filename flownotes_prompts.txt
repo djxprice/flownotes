@@ -84,7 +84,11 @@ Prompts to recreate the FlowNotes Chrome extension project from scratch:
 13) Display all notes for the current flow
 - Add a “Display” button next to “Note+” on the toolbar
 - Query via REST SOQL: SELECT Id, NoteText__c, PosTop__c, PosLeft__c, CanvasUrl__c FROM FlowNote__c WHERE FlowId__c = '<flowId>' ORDER BY CreatedDate
-- Render each note as a draggable sticky at saved positions; close (×) to dismiss
+- Render each note as a draggable sticky at saved canvas-relative positions; close (×) to dismiss
+- Keep notes anchored while panning/zooming:
+  - Store coordinates relative to the canvas bounding rect
+  - On layout, recompute viewport position using current canvas rect and a uniform scale factor
+  - Hide notes when their anchor is off-screen; show when back in view
 
 10) Initialize version control (Git)
 - Open terminal in project root
