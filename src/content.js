@@ -368,11 +368,15 @@ function openNotePopover() {
 				return;
 			}
 			const rect = pop.getBoundingClientRect();
+			// Measure relative to Flow canvas bounding rect (viewport relative) for scroll-proof positioning
+			const canvasRect = getCanvasRect();
+			const relTop = Math.round(rect.top - canvasRect.top);
+			const relLeft = Math.round(rect.left - canvasRect.left);
 			const payload = {
 				FlowId__c: flowId,
 				NoteText__c: noteText,
-				PosTop__c: Math.round(rect.top),
-				PosLeft__c: Math.round(rect.left),
+				PosTop__c: relTop,
+				PosLeft__c: relLeft,
 				CanvasUrl__c: topHref
 			};
 			await createFlowNote(payload);
@@ -574,15 +578,19 @@ function renderDisplayNote(doc, rec, index) {
 		maxWidth: "40vw",
 		padding: "8px"
 	});
-	// Position
-	let top = (typeof rec?.PosTop__c === "number") ? rec.PosTop__c : 120 + index * 24;
-	let left = (typeof rec?.PosLeft__c === "number") ? rec.PosLeft__c : 24;
+	// Position relative to Flow canvas bounding rect
+	const canvasRect = getCanvasRect();
+	const savedTop = (typeof rec?.PosTop__c === "number") ? rec.PosTop__c : 120 + index * 24;
+	const savedLeft = (typeof rec?.PosLeft__c === "number") ? rec.PosLeft__c : 24;
+	let top = canvasRect.top + savedTop;
+	let left = canvasRect.left + savedLeft;
+	// Clamp into viewport
 	const maxTop = Math.max(0, (window.innerHeight || 800) - 160);
 	const maxLeft = Math.max(0, (window.innerWidth || 1200) - 300);
 	top = Math.min(Math.max(0, top), maxTop);
 	left = Math.min(Math.max(0, left), maxLeft);
-	el.style.top = `${top}px`;
-	el.style.left = `${left}px`;
+	el.style.top = `${Math.round(top)}px`;
+	el.style.left = `${Math.round(left)}px`;
 
 	// Header
 	const header = doc.createElement("div");
@@ -632,6 +640,29 @@ function renderDisplayNote(doc, rec, index) {
 
 function escapeSoqlLiteral(value) {
 	return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function getCanvasRect() {
+	const doc = getTargetDocument();
+	const svgs = Array.from(doc.querySelectorAll("svg"));
+	if (svgs.length === 0) {
+		// Fallback to viewport with some padding
+		const vw = window.innerWidth || 1200;
+		const vh = window.innerHeight || 800;
+		return { top: 0, left: 0, width: vw, height: vh };
+	}
+	// Choose the largest visible SVG as the canvas
+	let best = null;
+	let bestArea = 0;
+	for (const svg of svgs) {
+		const r = svg.getBoundingClientRect();
+		const area = Math.max(0, r.width) * Math.max(0, r.height);
+		if (area > bestArea) {
+			bestArea = area;
+			best = r;
+		}
+	}
+	return best || svgs[0].getBoundingClientRect();
 }
 // Initialize in all frames (Flow Builder may render within an inner frame)
 ensureToolbarMounted();
