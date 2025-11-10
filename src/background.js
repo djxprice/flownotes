@@ -144,6 +144,30 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				// { path, method, body }
 				const tab = await findSalesforceTab();
 				if (!tab?.id) throw new Error("No Salesforce tab");
+				const url = new URL(tab.url);
+				const currentOrigin = `${url.protocol}//${url.host}`;
+				const instanceOrigin = deriveInstanceOriginFromHost(url.host);
+				// Try instance-origin fetch with SID first
+				try {
+					const { sid } = await tryGetSidForUrls([instanceOrigin, currentOrigin, "https://login.salesforce.com"]);
+					if (sid) {
+						const headers = new Headers();
+						headers.set("Authorization", `Bearer ${sid}`);
+						headers.set("Accept", "application/json");
+						if (message.body) headers.set("Content-Type", "application/json");
+						const resp = await fetch(`${instanceOrigin}${message.path}`, {
+							method: message.method || "GET",
+							headers,
+							body: message.body ? JSON.stringify(message.body) : undefined
+						});
+						const bodyText = await resp.text();
+						sendResponse({ ok: resp.ok, status: resp.status, body: bodyText, contentType: resp.headers.get("content-type") });
+						return;
+					}
+				} catch {
+					// fall through to content-script proxy
+				}
+				// Fallback to same-origin content script proxy
 				const ready = await ensureContentScript(tab.id);
 				if (!ready) throw new Error("Content script not injected");
 				const result = await proxyViaContent(tab.id, { path: message.path, method: message.method, body: message.body });

@@ -390,22 +390,21 @@ function parseFlowIdFromUrl(href) {
 }
 
 async function createFlowNote(fields) {
-	// POST to REST sObject endpoint using same-origin fetch with cookies
-	const res = await fetch("/services/data/v60.0/sobjects/FlowNote__c", {
+	// Route via background proxy to call the org instance with SID Authorization
+	const res = await chrome.runtime.sendMessage({
+		type: "proxy",
+		path: "/services/data/v60.0/sobjects/FlowNote__c",
 		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			"Accept": "application/json"
-		},
-		credentials: "include",
-		body: JSON.stringify(fields)
+		body: fields
 	});
-	if (!res.ok) {
-		let detail = "";
-		try { detail = await res.text(); } catch {}
-		throw new Error(`HTTP ${res.status} ${detail}`);
+	if (!res?.ok) {
+		throw new Error(`HTTP ${res?.status || ""} ${res?.body || res?.error || ""}`.trim());
 	}
-	return await res.json();
+	try {
+		return JSON.parse(res.body || "{}");
+	} catch {
+		return { ok: true };
+	}
 }
 
 // Initialize in all frames (Flow Builder may render within an inner frame)
