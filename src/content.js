@@ -430,7 +430,16 @@ function openNotePopover() {
 				BRX__c: br ? Number(br.x.toFixed(5)) : null,
 				BRY__c: br ? Number(br.y.toFixed(5)) : null
 			};
-			await createFlowNote(payload);
+			const created = await createFlowNote(payload);
+			// Cache creation on-screen size for exact reuse
+			try {
+				const sizeKey = created?.id ? `flownotes:size:${created.id}` : null;
+				if (sizeKey) {
+					await chrome.storage.local.set({
+						[sizeKey]: { w: Math.round(rect.width), h: Math.round(rect.height) }
+					});
+				}
+			} catch {}
 			pop.remove();
 		} catch (err) {
 			console.warn("[FlowNotes] Save failed", err);
@@ -590,6 +599,8 @@ let baselineCanvasRect = null;
 
 async function displayNotesForCurrentFlow() {
 	try {
+		// Avoid duplicate rendering from iframes
+		if (window !== window.top) return;
 		const href = (() => { try { return window.top.location.href; } catch { return window.location.href; } })();
 		const flowId = parseFlowIdFromUrl(href);
 		if (!flowId) {
@@ -599,7 +610,7 @@ async function displayNotesForCurrentFlow() {
 		clearDisplayedNotes();
 		// Set baseline canvas rect for fallback positioning
 		baselineCanvasRect = getCanvasRect();
-		const soql = `SELECT Id, NoteText__c, PosTop__c, PosLeft__c, CanvasUrl__c FROM FlowNote__c WHERE FlowId__c = '${escapeSoqlLiteral(flowId)}' ORDER BY CreatedDate ASC`;
+		const soql = `SELECT Id, NoteText__c, PosTop__c, PosLeft__c, CanvasUrl__c, TLX__c, TLY__c, TRX__c, TRY__c, BLX__c, BLY__c, BRX__c, BRY__c FROM FlowNote__c WHERE FlowId__c = '${escapeSoqlLiteral(flowId)}' ORDER BY CreatedDate ASC`;
 		const res = await chrome.runtime.sendMessage({
 			type: "proxy",
 			path: `/services/data/v60.0/query?q=${encodeURIComponent(soql)}`,
@@ -634,6 +645,12 @@ function renderDisplayNote(doc, rec, index) {
 	// Reuse creation popout UI, but prefill and update on save
 	const el = doc.createElement("div");
 	el.className = DISPLAY_NOTE_CLASS;
+	if (rec?.Id) {
+		el.dataset.id = String(rec.Id);
+		// De-duplicate: remove any existing element for this Id
+		const existing = doc.querySelector(`.${DISPLAY_NOTE_CLASS}[data-id="${rec.Id}"]`);
+		if (existing) existing.remove();
+	}
 	Object.assign(el.style, {
 		position: "fixed",
 		zIndex: "2147483647",
@@ -761,6 +778,19 @@ function renderDisplayNote(doc, rec, index) {
 
 	// Position and size based on anchors
 	const node = getCanvasTransformNode() || getCanvasSvg();
+	// Cache saved baseline scales on element for quick layout scaling
+	try {
+		const href = (() => { try { return window.top.location.href; } catch { return window.location.href; } })();
+		const flowId = parseFlowIdFromUrl(href);
+		if (flowId) {
+			chrome.storage.local.get([`flownotes:scaleX:${flowId}`, `flownotes:scaleY:${flowId}`]).then((res) => {
+				const sx = Number(res[`flownotes:scaleX:${flowId}`] || 1) || 1;
+				const sy = Number(res[`flownotes:scaleY:${flowId}`] || 1) || 1;
+				el.dataset.savedSx = String(sx);
+				el.dataset.savedSy = String(sy);
+			});
+		}
+	} catch {}
 	const tl = (typeof rec?.TLX__c === "number" && typeof rec?.TLY__c === "number") ? { x: rec.TLX__c, y: rec.TLY__c } : null;
 	const tr = (typeof rec?.TRX__c === "number" && typeof rec?.TRY__c === "number") ? { x: rec.TRX__c, y: rec.TRY__c } : null;
 	const bl = (typeof rec?.BLX__c === "number" && typeof rec?.BLY__c === "number") ? { x: rec.BLX__c, y: rec.BLY__c } : null;
@@ -769,17 +799,75 @@ function renderDisplayNote(doc, rec, index) {
 		const trS = svgToTopCoords(node, tr.x, tr.y);
 		const blS = svgToTopCoords(node, bl.x, bl.y);
 		if (tlS && trS && blS) {
-			const width = Math.max(120, Math.round(Math.hypot(trS.x - tlS.x, trS.y - tlS.y)));
-			const height = Math.max(80, Math.round(Math.hypot(blS.x - tlS.x, blS.y - tlS.y)));
-			el.style.width = `${width}px`;
-			el.style.height = `${height}px`;
-			el.style.top = `${Math.round(tlS.y)}px`;
-			el.style.left = `${Math.round(tlS.x)}px`;
+			let width = Math.max(120, Math.round(Math.abs(trS.x - tlS.x)));
+			let height = Math.max(80, Math.round(Math.abs(blS.y - tlS.y)));
+			// Prefer exact creation size if cached
+			const sizeKey = `flownotes:size:${rec.Id}`;
+			chrome.storage.local.get([sizeKey]).then((res) => {
+				const cached = res[sizeKey];
+				const cachedW = cached?.w || null;
+				const cachedH = cached?.h || null;
+				if (cachedW && cachedH) {
+					width = cachedW;
+					height = cachedH;
+				}
+				el.style.width = `${width}px`;
+				el.style.height = `${height}px`;
+				el.style.top = `${Math.round(tlS.y)}px`;
+				el.style.left = `${Math.round(tlS.x)}px`;
+				el.dataset.sizeLocked = "1";
+				// Debug overlay
+				try {
+					const dbg = doc.createElement("div");
+					dbg.className = "flownotes-debug";
+					Object.assign(dbg.style, {
+						position: "absolute",
+						top: "2px",
+						left: "2px",
+						padding: "2px 4px",
+						font: "10px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+						background: "rgba(0,0,0,0.5)",
+						color: "#fff",
+						borderRadius: "3px",
+						pointerEvents: "none"
+					});
+					const dx = (trS.x - tlS.x);
+					const dy = (trS.y - tlS.y);
+					const wX = Math.abs(dx);
+					dbg.textContent = `TL(${tlS.x.toFixed(1)},${tlS.y.toFixed(1)}) TR(${trS.x.toFixed(1)},${trS.y.toFixed(1)}) wX=${wX.toFixed(1)} w=${width} h=${height}`;
+					el.appendChild(dbg);
+					console.log("[FlowNotes][DEBUG] anchors", {
+						tlS, trS, blS, width, height, dx, dy, wX, cachedW, cachedH
+					});
+				} catch {}
+			});
 		}
 	} else {
 		// Fallback to previous single-point method
 		layoutDisplayedNotes();
 	}
+	// Ensure a debug banner exists even if CTM or anchors are missing
+	try {
+		let dbg0 = el.querySelector(".flownotes-debug");
+		if (!dbg0) {
+			dbg0 = doc.createElement("div");
+			dbg0.className = "flownotes-debug";
+			Object.assign(dbg0.style, {
+				position: "absolute",
+				top: "2px",
+				left: "2px",
+				padding: "2px 4px",
+				font: "10px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+				background: "rgba(180,0,0,0.6)",
+				color: "#fff",
+				borderRadius: "3px",
+				pointerEvents: "none",
+				zIndex: "2147483647"
+			});
+			dbg0.textContent = "DBG: awaiting layout";
+			el.appendChild(dbg0);
+		}
+	} catch {}
 }
 
 function escapeSoqlLiteral(value) {
@@ -954,8 +1042,8 @@ function layoutDisplayedNotes() {
 				}
 			}
 		}
-		// If four-corner anchors exist, recompute width/height each layout to match creation size
-		if (hasCorners) {
+		// If four-corner anchors exist, recompute width/height unless we've locked size to creation
+		if (hasCorners && el.dataset.sizeLocked !== "1") {
 			const tl = { x: savedLeft, y: savedTop };
 			const tr = { x: Number(el.dataset.trx), y: Number(el.dataset.try) };
 			const bl = { x: Number(el.dataset.blx), y: Number(el.dataset.bly) };
@@ -965,13 +1053,39 @@ function layoutDisplayedNotes() {
 				const trS = svgToTopCoords(node, tr.x, tr.y);
 				const blS = svgToTopCoords(node, bl.x, bl.y);
 				if (tlS && trS && blS) {
-					const width = Math.max(120, Math.round(Math.hypot(trS.x - tlS.x, trS.y - tlS.y)));
-					const height = Math.max(80, Math.round(Math.hypot(blS.x - tlS.x, blS.y - tlS.y)));
+					const width = Math.max(120, Math.round(Math.abs(trS.x - tlS.x)));
+					const height = Math.max(80, Math.round(Math.abs(blS.y - tlS.y)));
 					el.style.width = `${width}px`;
 					el.style.height = `${height}px`;
 					anchorLeft = tlS.x;
 					anchorTop = tlS.y;
 					done = true;
+					// Debug overlay
+					try {
+						let dbg = el.querySelector(".flownotes-debug");
+						if (!dbg) {
+							dbg = doc.createElement("div");
+							dbg.className = "flownotes-debug";
+							Object.assign(dbg.style, {
+								position: "absolute",
+								top: "2px",
+								left: "2px",
+								padding: "2px 4px",
+								font: "10px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+								background: "rgba(180,0,0,0.6)",
+								color: "#fff",
+								borderRadius: "3px",
+								pointerEvents: "none",
+								zIndex: "2147483647"
+							});
+							el.appendChild(dbg);
+						}
+						const wX = Math.abs(trS.x - tlS.x);
+						const dX = (trS.x - tlS.x);
+						const dY = (trS.y - tlS.y);
+						dbg.textContent = `TL(${tlS.x.toFixed(1)},${tlS.y.toFixed(1)}) TR(${trS.x.toFixed(1)},${trS.y.toFixed(1)}) wX=${wX.toFixed(1)} dX=${dX.toFixed(2)} dY=${dY.toFixed(2)} setW=${width} setH=${height}`;
+						console.log("[FlowNotes][DEBUG][layout1]", { tlS, trS, blS, width, height, wX, dX, dY });
+					} catch {}
 				}
 			}
 			if (!done) {
@@ -988,8 +1102,8 @@ function layoutDisplayedNotes() {
 				});
 			}
 		}
-		// If four-corner anchors exist, recompute width/height each layout to match creation size
-		if (hasCorners) {
+		// If four-corner anchors exist, recompute width/height unless we've locked size to creation
+		if (hasCorners && el.dataset.sizeLocked !== "1") {
 			const tl = { x: savedLeft, y: savedTop };
 			const tr = { x: Number(el.dataset.trx), y: Number(el.dataset.try) };
 			const bl = { x: Number(el.dataset.blx), y: Number(el.dataset.bly) };
@@ -999,13 +1113,39 @@ function layoutDisplayedNotes() {
 				const trS = svgToTopCoords(node, tr.x, tr.y);
 				const blS = svgToTopCoords(node, bl.x, bl.y);
 				if (tlS && trS && blS) {
-					const width = Math.max(120, Math.round(Math.hypot(trS.x - tlS.x, trS.y - tlS.y)));
-					const height = Math.max(80, Math.round(Math.hypot(blS.x - tlS.x, blS.y - tlS.y)));
+					const width = Math.max(120, Math.round(Math.abs(trS.x - tlS.x)));
+					const height = Math.max(80, Math.round(Math.abs(blS.y - tlS.y)));
 					el.style.width = `${width}px`;
 					el.style.height = `${height}px`;
 					anchorLeft = tlS.x;
 					anchorTop = tlS.y;
 					setDims = true;
+					// Debug overlay
+					try {
+						let dbg = el.querySelector(".flownotes-debug");
+						if (!dbg) {
+							dbg = doc.createElement("div");
+							dbg.className = "flownotes-debug";
+							Object.assign(dbg.style, {
+								position: "absolute",
+								top: "2px",
+								left: "2px",
+								padding: "2px 4px",
+								font: "10px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+								background: "rgba(180,0,0,0.6)",
+								color: "#fff",
+								borderRadius: "3px",
+								pointerEvents: "none",
+								zIndex: "2147483647"
+							});
+							el.appendChild(dbg);
+						}
+						const wX = Math.abs(trS.x - tlS.x);
+						const dX = (trS.x - tlS.x);
+						const dY = (trS.y - tlS.y);
+						dbg.textContent = `TL(${tlS.x.toFixed(1)},${tlS.y.toFixed(1)}) TR(${trS.x.toFixed(1)},${trS.y.toFixed(1)}) wX=${wX.toFixed(1)} dX=${dX.toFixed(2)} dY=${dY.toFixed(2)} setW=${width} setH=${height}`;
+						console.log("[FlowNotes][DEBUG][layout2]", { tlS, trS, blS, width, height, wX, dX, dY });
+					} catch {}
 				}
 			}
 			if (!setDims) {
@@ -1038,7 +1178,23 @@ function layoutDisplayedNotes() {
 			continue;
 		}
 		el.style.display = "";
-		el.style.transform = "";
+		// Apply uniform per-axis scale relative to saved baseline
+		try {
+			const savedSx = Number(el.dataset.savedSx || 1) || 1;
+			const savedSy = Number(el.dataset.savedSy || 1) || 1;
+			let curSx = 1, curSy = 1;
+			if (node && typeof node.getScreenCTM === "function") {
+				const m = node.getScreenCTM();
+				curSx = Math.hypot(m.a, m.b) || 1;
+				curSy = Math.hypot(m.c, m.d) || 1;
+			}
+			const fx = savedSx ? (curSx / savedSx) : 1;
+			const fy = savedSy ? (curSy / savedSy) : 1;
+			el.style.transformOrigin = "top left";
+			el.style.transform = `scale(${fx}, ${fy})`;
+		} catch {
+			el.style.transform = "";
+		}
 		el.style.top = `${Math.round(anchorTop)}px`;
 		el.style.left = `${Math.round(anchorLeft)}px`;
 	}
