@@ -172,6 +172,7 @@ function makeDraggable(moveEl) {
 
 	function onMouseDown(e) {
 		isDragging = true;
+		moveEl.dataset.dragging = "1";
 		startX = e.clientX;
 		startY = e.clientY;
 		const rect = moveEl.getBoundingClientRect();
@@ -195,9 +196,17 @@ function makeDraggable(moveEl) {
 	function onMouseUp() {
 		if (!isDragging) return;
 		isDragging = false;
+		delete moveEl.dataset.dragging;
 		window.removeEventListener("mousemove", onMouseMove);
 		window.removeEventListener("mouseup", onMouseUp);
 		persistToolbarPosition(moveEl);
+		// If this is a displayed note, update its canvas-relative dataset so it stays anchored
+		if (moveEl.classList.contains(DISPLAY_NOTE_CLASS)) {
+			const rect = moveEl.getBoundingClientRect();
+			const canvasRect = getCanvasRect();
+			moveEl.dataset.canvasTop = String(Math.round(rect.top - canvasRect.top));
+			moveEl.dataset.canvasLeft = String(Math.round(rect.left - canvasRect.left));
+		}
 	}
 	moveEl.addEventListener("mousedown", onMouseDown);
 }
@@ -578,19 +587,11 @@ function renderDisplayNote(doc, rec, index) {
 		maxWidth: "40vw",
 		padding: "8px"
 	});
-	// Position relative to Flow canvas bounding rect
-	const canvasRect = getCanvasRect();
+	// Save canvas-relative coords in dataset for responsive layout
 	const savedTop = (typeof rec?.PosTop__c === "number") ? rec.PosTop__c : 120 + index * 24;
 	const savedLeft = (typeof rec?.PosLeft__c === "number") ? rec.PosLeft__c : 24;
-	let top = canvasRect.top + savedTop;
-	let left = canvasRect.left + savedLeft;
-	// Clamp into viewport
-	const maxTop = Math.max(0, (window.innerHeight || 800) - 160);
-	const maxLeft = Math.max(0, (window.innerWidth || 1200) - 300);
-	top = Math.min(Math.max(0, top), maxTop);
-	left = Math.min(Math.max(0, left), maxLeft);
-	el.style.top = `${Math.round(top)}px`;
-	el.style.left = `${Math.round(left)}px`;
+	el.dataset.canvasTop = String(savedTop);
+	el.dataset.canvasLeft = String(savedLeft);
 
 	// Header
 	const header = doc.createElement("div");
@@ -636,6 +637,8 @@ function renderDisplayNote(doc, rec, index) {
 	el.appendChild(body);
 	(doc.body || doc.documentElement).appendChild(el);
 	makeDraggable(el);
+	// Initial layout
+	layoutDisplayedNotes();
 }
 
 function escapeSoqlLiteral(value) {
@@ -664,10 +667,51 @@ function getCanvasRect() {
 	}
 	return best || svgs[0].getBoundingClientRect();
 }
+
+// Reposition displayed notes to stay anchored to the canvas rect
+let lastCanvasRectKey = "";
+function layoutDisplayedNotes() {
+	const rect = getCanvasRect();
+	const key = `${Math.round(rect.top)}|${Math.round(rect.left)}|${Math.round(rect.width)}|${Math.round(rect.height)}`;
+	lastCanvasRectKey = key;
+	const doc = getTargetDocument();
+	const nodes = doc.querySelectorAll(`.${DISPLAY_NOTE_CLASS}`);
+	for (const el of nodes) {
+		// Skip while dragging
+		if (el.dataset.dragging === "1") continue;
+		const savedTop = Number(el.dataset.canvasTop || 0);
+		const savedLeft = Number(el.dataset.canvasLeft || 0);
+		let top = rect.top + savedTop;
+		let left = rect.left + savedLeft;
+		// Clamp into viewport
+		const maxTop = Math.max(0, (window.innerHeight || 800) - 160);
+		const maxLeft = Math.max(0, (window.innerWidth || 1200) - 300);
+		top = Math.min(Math.max(0, top), maxTop);
+		left = Math.min(Math.max(0, left), maxLeft);
+		el.style.top = `${Math.round(top)}px`;
+		el.style.left = `${Math.round(left)}px`;
+	}
+}
 // Initialize in all frames (Flow Builder may render within an inner frame)
 ensureToolbarMounted();
 // Re-check shortly after initial load in case Lightning router updated late
 setTimeout(ensureToolbarMounted, 1200);
 watchRouteChanges();
+// Keep notes anchored on scroll/resize/canvas changes
+window.addEventListener("scroll", () => layoutDisplayedNotes(), true);
+window.addEventListener("resize", () => layoutDisplayedNotes(), true);
+(function trackCanvas() {
+	let lastKey = "";
+	function tick() {
+		const r = getCanvasRect();
+		const key = `${Math.round(r.top)}|${Math.round(r.left)}|${Math.round(r.width)}|${Math.round(r.height)}`;
+		if (key !== lastKey) {
+			lastKey = key;
+			layoutDisplayedNotes();
+		}
+		requestAnimationFrame(tick);
+	}
+	requestAnimationFrame(tick);
+})();
 
 
