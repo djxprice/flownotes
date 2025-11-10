@@ -534,7 +534,7 @@ async function maybePatchDeferred(recordId, deferredUpdate, access) {
 // Display notes for current flow
 // -------------------------------------------------------------------
 const DISPLAY_NOTE_CLASS = "flownotes-note-display";
-const MIN_SCALE = 0.6;
+const MIN_VISIBLE_SCALE = 0.5;
 const MAX_SCALE = 2.0;
 let baselineCanvasRect = null;
 
@@ -683,8 +683,8 @@ function layoutDisplayedNotes() {
 	if (!baselineCanvasRect) baselineCanvasRect = rect;
 	let scaleX = rect.width && baselineCanvasRect.width ? rect.width / baselineCanvasRect.width : 1;
 	let scaleY = rect.height && baselineCanvasRect.height ? rect.height / baselineCanvasRect.height : 1;
-	// Use uniform scaling and clamp to avoid extreme jitter at tiny zoom levels
-	let scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.min(scaleX, scaleY) || 1));
+	// Use uniform scaling; only clamp upper bound to avoid oversized growth, preserve very small scales
+	let scale = Math.min(MAX_SCALE, Math.min(scaleX, scaleY) || 1);
 	scaleX = scaleY = scale;
 	const key = `${Math.round(rect.top)}|${Math.round(rect.left)}|${Math.round(rect.width)}|${Math.round(rect.height)}`;
 	lastCanvasRectKey = key;
@@ -704,7 +704,7 @@ function layoutDisplayedNotes() {
 			anchorLeft >= -margin &&
 			anchorTop <= (window.innerHeight || 800) + margin &&
 			anchorLeft <= (window.innerWidth || 1200) + margin;
-		if (!inView) {
+		if (!inView || scale < MIN_VISIBLE_SCALE) {
 			el.style.display = "none";
 			continue;
 		}
