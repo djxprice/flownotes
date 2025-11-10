@@ -1,0 +1,20 @@
+Apex REST restriction (future implementation idea)
+
+- Goal: Limit the extension to call only Apex REST endpoints to enforce least privilege.
+- Mechanism:
+  - In the background proxy, allowlist paths that start with /services/apexrest/.
+  - Route all extension-initiated API calls through these Apex endpoints only.
+- Server side:
+  - Expose required operations via Apex @RestResource controllers “with sharing”.
+  - Apply Profiles/Permission Sets for CRUD/FLS; add input validation and logging.
+- Benefits:
+  - Stronger server-side authorization and auditability.
+  - Prevents accidental access to generic REST/Tooling endpoints.
+- Trade-offs:
+  - Requires deploying and maintaining Apex controllers.
+  - Reduces flexibility for ad-hoc queries/operations.
+- Rollout notes:
+  - Make the allowlist toggleable (config flag) for dev vs prod.
+  - Document allowed routes and expected payloads in README when enabled.
+
+

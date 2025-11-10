@@ -1,0 +1,15 @@
+{
+  "name": "flownotes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FlowNotes Chrome extension",
+  "scripts": {
+    "generate:icons": "node scripts/generate-icons.js"
+  },
+  "devDependencies": {},
+  "dependencies": {
+    "pngjs": "^7.0.0"
+  }
+}
+
+

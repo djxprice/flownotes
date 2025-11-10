@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "FlowNotes",
+  "version": "0.1.0",
+  "description": "Capture notes while working in Salesforce. Connects securely to your org.",
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "32": "assets/icons/icon-32.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "FlowNotes",
+    "default_popup": "src/popup.html"
+  },
+  "options_page": "src/options.html",
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "cookies",
+    "storage",
+    "tabs",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://login.salesforce.com/*",
+    "https://test.salesforce.com/*",
+    "https://*.salesforce.com/*",
+    "https://*.force.com/*",
+    "https://*.visualforce.com/*",
+    "https://*.salesforce-sites.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.salesforce.com/*",
+        "https://*.force.com/*",
+        "https://*.visualforce.com/*",
+        "https://*.salesforce-sites.com/*"
+      ],
+      "js": ["src/content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
+
+

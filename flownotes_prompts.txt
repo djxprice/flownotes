@@ -1,0 +1,57 @@
+Prompts to recreate the FlowNotes Chrome extension project from scratch:
+
+0) Prerequisite: Install Node.js LTS (if npm not found)
+- Windows (winget): winget install --id OpenJS.NodeJS.LTS -e --silent --accept-package-agreements --accept-source-agreements
+
+1) Create a Chrome extension manifest (MV3) named "FlowNotes"
+- Include background service worker at `src/background.js` (type: module)
+- Add action with default popup `src/popup.html`
+- Add options page at `src/options.html`
+- Request permissions: cookies, storage, tabs, activeTab, scripting
+- Host permissions: https://login.salesforce.com/*, https://test.salesforce.com/*, https://*.salesforce.com/*, https://*.force.com/*, https://*.visualforce.com/*, https://*.salesforce-sites.com/*
+- Content script: matches the same Salesforce hosts and loads `src/content.js`
+- Reference icons: assets/icons/icon-16.png, -32, -48, -128
+
+2) Implement background service worker (session piggyback, no Connected App)
+- Find an open Salesforce tab across the supported domains
+- Derive API instance origin from Lightning domains (*.lightning.force.com → *.my.salesforce.com)
+- Try reading `sid` via chrome.cookies.get for candidate URLs (instance origin, current origin, login.salesforce.com)
+- If `sid` found, call /services/data/v60.0/chatter/users/me with Authorization: Bearer <sid>
+- If not, dynamically inject the content script and proxy a same‑origin fetch for the same endpoint
+- Store minimal auth state (instanceUrl, userId) and expose message handlers: getStatus, proxy, logout
+
+3) Create the content script
+- `src/content.js` listens for messages { type: 'proxy', request } and performs same‑origin fetch with credentials
+- Responds to { type: 'ping' } to confirm injection
+
+4) Create popup UI to connect and display user/org
+- `src/popup.html` with “Check Salesforce Session” and “Clear Cache”
+- `src/popup.js` sends messages to background: getStatus (session detection), logout (clear cached state)
+- Show user name from /services/data/v60.0/chatter/users/me and org domain
+
+5) Create options page to choose Salesforce login domain
+- `src/options.html` radio for Production (login) vs Sandbox (test)
+- Save to chrome.storage.sync key `loginDomain`
+
+6) Generate icons with 3 stacked wavy lines
+- Initialize Node project (package.json)
+- Add `pngjs` dependency
+- Write `scripts/generate-icons.js` to draw lines and output PNGs
+- Output files: assets/icons/icon-{16,32,48,128}.png
+- Script: `npm run generate:icons`
+- Combined: `npm install && npm run generate:icons`
+
+7) Load the extension
+- Chrome → Manage Extensions → Enable Developer Mode → Load unpacked → select project root
+
+8) No Connected App required
+- Ensure user is logged into a Salesforce tab; API access must be enabled for the user/profile
+- The extension reads the session cookie and uses it to call REST endpoints
+
+9) Use the extension
+- Open a Salesforce tab and sign in → open popup → “Check Salesforce Session”
+- If “No session cookie”: verify Chrome cookie settings and enterprise policies
+
+
+
+
