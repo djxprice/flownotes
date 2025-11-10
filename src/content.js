@@ -398,6 +398,11 @@ function openNotePopover() {
 			const canvasRect = getCanvasRect();
 			const relLeft = Math.round(local ? local.x : (rect.left - canvasRect.left));
 			const relTop = Math.round(local ? local.y : (rect.top - canvasRect.top));
+			// Persist current canvas scale locally for better fallback math later
+			try {
+				const curScale = getCanvasScale();
+				await chrome.storage.local.set({ [`flownotes:scale:${flowId}`]: curScale });
+			} catch {}
 			const payload = {
 				FlowId__c: flowId,
 				NoteText__c: noteText,
@@ -768,6 +773,24 @@ function layoutDisplayedNotes() {
 		if (svg) {
 			const pt = svgToTopCoords(svg, savedLeft, savedTop);
 			if (pt) { anchorLeft = pt.x; anchorTop = pt.y; }
+			else {
+				// Fallback with scale factor if CTM mapping failed
+				const curScale = getCanvasScale();
+				const flowId = (() => { try { return parseFlowIdFromUrl(window.top.location.href); } catch { return parseFlowIdFromUrl(window.location.href); } })();
+				if (flowId) {
+					try {
+						// Async get; schedule update
+						chrome.storage.local.get([`flownotes:scale:${flowId}`]).then((res) => {
+							const savedScale = Number(res[`flownotes:scale:${flowId}`] || 1) || 1;
+							const f = (savedScale && Number.isFinite(savedScale)) ? (curScale / savedScale) : 1;
+							const aTop = rect.top + savedTop * f;
+							const aLeft = rect.left + savedLeft * f;
+							el.style.top = `${Math.round(aTop)}px`;
+							el.style.left = `${Math.round(aLeft)}px`;
+						});
+					} catch {}
+				}
+			}
 		}
 		// When CTM is available, prefer matrix placement for accuracy
 		// Position without scaling for stability; clamp into viewport for visibility
