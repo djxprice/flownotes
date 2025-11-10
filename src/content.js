@@ -681,15 +681,20 @@ function layoutDisplayedNotes() {
 		if (el.dataset.dragging === "1") continue;
 		const savedTop = Number(el.dataset.canvasTop || 0);
 		const savedLeft = Number(el.dataset.canvasLeft || 0);
-		let top = rect.top + savedTop;
-		let left = rect.left + savedLeft;
-		// Clamp into viewport
-		const maxTop = Math.max(0, (window.innerHeight || 800) - 160);
-		const maxLeft = Math.max(0, (window.innerWidth || 1200) - 300);
-		top = Math.min(Math.max(0, top), maxTop);
-		left = Math.min(Math.max(0, left), maxLeft);
-		el.style.top = `${Math.round(top)}px`;
-		el.style.left = `${Math.round(left)}px`;
+		const anchorTop = rect.top + savedTop;
+		const anchorLeft = rect.left + savedLeft;
+		const inView =
+			anchorTop >= 0 &&
+			anchorLeft >= 0 &&
+			anchorTop <= (window.innerHeight || 800) &&
+			anchorLeft <= (window.innerWidth || 1200);
+		if (!inView) {
+			el.style.display = "none";
+			continue;
+		}
+		el.style.display = "";
+		el.style.top = `${Math.round(anchorTop)}px`;
+		el.style.left = `${Math.round(anchorLeft)}px`;
 	}
 }
 // Initialize in all frames (Flow Builder may render within an inner frame)
