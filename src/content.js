@@ -403,8 +403,17 @@ function openNotePopover() {
 			const relTop = Math.round(tl ? tl.y : (rect.top - canvasRect.top));
 			// Persist current canvas scale locally for better fallback math later
 			try {
-				const curScale = getCanvasScale();
-				await chrome.storage.local.set({ [`flownotes:scale:${flowId}`]: curScale });
+				const nodeForScale = getCanvasTransformNode() || getCanvasSvg();
+				let sx = 1, sy = 1;
+				if (nodeForScale && typeof nodeForScale.getScreenCTM === "function") {
+					const m = nodeForScale.getScreenCTM();
+					sx = Math.hypot(m.a, m.b) || 1;
+					sy = Math.hypot(m.c, m.d) || 1;
+				}
+				await chrome.storage.local.set({
+					[`flownotes:scaleX:${flowId}`]: sx,
+					[`flownotes:scaleY:${flowId}`]: sy
+				});
 			} catch {}
 			const payload = {
 				FlowId__c: flowId,
@@ -641,6 +650,10 @@ function renderDisplayNote(doc, rec, index) {
 	const savedLeft = typeof rec?.TLX__c === "number" ? rec.TLX__c : (typeof rec?.PosLeft__c === "number" ? rec.PosLeft__c : 24);
 	el.dataset.canvasTop = String(savedTop);
 	el.dataset.canvasLeft = String(savedLeft);
+	if (typeof rec?.TRX__c === "number") el.dataset.trx = String(rec.TRX__c);
+	if (typeof rec?.TRY__c === "number") el.dataset.try = String(rec.TRY__c);
+	if (typeof rec?.BLX__c === "number") el.dataset.blx = String(rec.BLX__c);
+	if (typeof rec?.BLY__c === "number") el.dataset.bly = String(rec.BLY__c);
 
 	// Header
 	const header = doc.createElement("div");
@@ -907,6 +920,7 @@ function layoutDisplayedNotes() {
 		if (el.dataset.dragging === "1") continue;
 		const savedTop = Number(el.dataset.canvasTop || 0);
 		const savedLeft = Number(el.dataset.canvasLeft || 0);
+		const hasCorners = el.dataset.trx !== undefined && el.dataset.try !== undefined && el.dataset.blx !== undefined && el.dataset.bly !== undefined;
 		// Map SVG local -> top window coords when possible
 		let anchorTop = rect.top + savedTop;
 		let anchorLeft = rect.left + savedLeft;
@@ -915,16 +929,24 @@ function layoutDisplayedNotes() {
 			if (pt) { anchorLeft = pt.x; anchorTop = pt.y; }
 			else {
 				// Fallback with scale factor if CTM mapping failed
-				const curScale = getCanvasScale();
 				const flowId = (() => { try { return parseFlowIdFromUrl(window.top.location.href); } catch { return parseFlowIdFromUrl(window.location.href); } })();
 				if (flowId) {
 					try {
 						// Async get; schedule update
-						chrome.storage.local.get([`flownotes:scale:${flowId}`]).then((res) => {
-							const savedScale = Number(res[`flownotes:scale:${flowId}`] || 1) || 1;
-							const f = (savedScale && Number.isFinite(savedScale)) ? (curScale / savedScale) : 1;
-							const aTop = rect.top + savedTop * f;
-							const aLeft = rect.left + savedLeft * f;
+						chrome.storage.local.get([`flownotes:scaleX:${flowId}`, `flownotes:scaleY:${flowId}`]).then((res) => {
+							const nodeForScale = getCanvasTransformNode() || getCanvasSvg();
+							let curSX = 1, curSY = 1;
+							if (nodeForScale && typeof nodeForScale.getScreenCTM === "function") {
+								const m2 = nodeForScale.getScreenCTM();
+								curSX = Math.hypot(m2.a, m2.b) || 1;
+								curSY = Math.hypot(m2.c, m2.d) || 1;
+							}
+							const savedSX = Number(res[`flownotes:scaleX:${flowId}`] || 1) || 1;
+							const savedSY = Number(res[`flownotes:scaleY:${flowId}`] || 1) || 1;
+							const fx = (savedSX && Number.isFinite(savedSX)) ? (curSX / savedSX) : 1;
+							const fy = (savedSY && Number.isFinite(savedSY)) ? (curSY / savedSY) : 1;
+							const aTop = rect.top + savedTop * fy;
+							const aLeft = rect.left + savedLeft * fx;
 							el.style.top = `${Math.round(aTop)}px`;
 							el.style.left = `${Math.round(aLeft)}px`;
 						});
@@ -932,6 +954,76 @@ function layoutDisplayedNotes() {
 				}
 			}
 		}
+		// If four-corner anchors exist, recompute width/height each layout to match creation size
+		if (hasCorners) {
+			const tl = { x: savedLeft, y: savedTop };
+			const tr = { x: Number(el.dataset.trx), y: Number(el.dataset.try) };
+			const bl = { x: Number(el.dataset.blx), y: Number(el.dataset.bly) };
+			let done = false;
+			if (node) {
+				const tlS = svgToTopCoords(node, tl.x, tl.y);
+				const trS = svgToTopCoords(node, tr.x, tr.y);
+				const blS = svgToTopCoords(node, bl.x, bl.y);
+				if (tlS && trS && blS) {
+					const width = Math.max(120, Math.round(Math.hypot(trS.x - tlS.x, trS.y - tlS.y)));
+					const height = Math.max(80, Math.round(Math.hypot(blS.x - tlS.x, blS.y - tlS.y)));
+					el.style.width = `${width}px`;
+					el.style.height = `${height}px`;
+					anchorLeft = tlS.x;
+					anchorTop = tlS.y;
+					done = true;
+				}
+			}
+			if (!done) {
+				const href = (() => { try { return window.top.location.href; } catch { return window.location.href; } })();
+				const flowId = parseFlowIdFromUrl(href);
+				const localW = Math.hypot(tr.x - tl.x, tr.y - tl.y);
+				const localH = Math.hypot(bl.x - tl.x, bl.y - tl.y);
+				chrome.storage.local.get([`flownotes:scale:${flowId}`]).then((res) => {
+					const savedScale = Number(res[`flownotes:scale:${flowId}`] || 1) || 1;
+					const width = Math.max(120, Math.round(localW * savedScale));
+					const height = Math.max(80, Math.round(localH * savedScale));
+					el.style.width = `${width}px`;
+					el.style.height = `${height}px`;
+				});
+			}
+		}
+		// If four-corner anchors exist, recompute width/height each layout to match creation size
+		if (hasCorners) {
+			const tl = { x: savedLeft, y: savedTop };
+			const tr = { x: Number(el.dataset.trx), y: Number(el.dataset.try) };
+			const bl = { x: Number(el.dataset.blx), y: Number(el.dataset.bly) };
+			let setDims = false;
+			if (node) {
+				const tlS = svgToTopCoords(node, tl.x, tl.y);
+				const trS = svgToTopCoords(node, tr.x, tr.y);
+				const blS = svgToTopCoords(node, bl.x, bl.y);
+				if (tlS && trS && blS) {
+					const width = Math.max(120, Math.round(Math.hypot(trS.x - tlS.x, trS.y - tlS.y)));
+					const height = Math.max(80, Math.round(Math.hypot(blS.x - tlS.x, blS.y - tlS.y)));
+					el.style.width = `${width}px`;
+					el.style.height = `${height}px`;
+					anchorLeft = tlS.x;
+					anchorTop = tlS.y;
+					setDims = true;
+				}
+			}
+			if (!setDims) {
+				const href = (() => { try { return window.top.location.href; } catch { return window.location.href; } })();
+				const flowId = parseFlowIdFromUrl(href);
+				const localW = Math.hypot(tr.x - tl.x, tr.y - tl.y);
+				const localH = Math.hypot(bl.x - tl.x, bl.y - tl.y);
+				chrome.storage.local.get([`flownotes:scaleX:${flowId}`, `flownotes:scaleY:${flowId}`]).then((res) => {
+					const sx = Number(res[`flownotes:scaleX:${flowId}`] || 1) || 1;
+					const sy = Number(res[`flownotes:scaleY:${flowId}`] || 1) || 1;
+					const width = Math.max(120, Math.round(localW * sx));
+					const height = Math.max(80, Math.round(localH * sy));
+					el.style.width = `${width}px`;
+					el.style.height = `${height}px`;
+				});
+			}
+		}
+
 		// Visibility check without altering the anchor position
 		const margin = 2;
 		const vw = (window.innerWidth || 1200);
