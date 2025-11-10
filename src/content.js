@@ -726,20 +726,9 @@ function layoutDisplayedNotes() {
 				anchorTop = sp.y;
 			} catch {}
 		}
-		// Allow a small margin to reduce flicker at screen edges
-		const margin = 10;
-		const inView =
-			anchorTop >= -margin &&
-			anchorLeft >= -margin &&
-			anchorTop <= (window.innerHeight || 800) + margin &&
-			anchorLeft <= (window.innerWidth || 1200) + margin;
-		if (!inView) {
-			el.style.display = "none";
-			continue;
-		}
-		el.style.display = "";
-		// Use CTM matrix to scale and position without double-applying transforms
-		if (m) {
+		// When CTM is available, prefer matrix placement for accuracy
+		if (m && Number.isFinite(anchorLeft) && Number.isFinite(anchorTop)) {
+			el.style.display = "";
 			// CSS matrix(a,b,c,d,e,f) corresponds to [ [a c e], [b d f], [0 0 1] ]
 			const tx = anchorLeft;
 			const ty = anchorTop;
@@ -748,8 +737,20 @@ function layoutDisplayedNotes() {
 			// Clear top/left to avoid interference
 			el.style.top = "";
 			el.style.left = "";
+			continue;
 		} else {
-			// Fallback: position without scaling
+			// Fallback: position without scaling; hide only if clearly off-screen
+			const margin = 10;
+			const inView =
+				anchorTop >= -margin &&
+				anchorLeft >= -margin &&
+				anchorTop <= (window.innerHeight || 800) + margin &&
+				anchorLeft <= (window.innerWidth || 1200) + margin;
+			if (!inView) {
+				el.style.display = "none";
+				continue;
+			}
+			el.style.display = "";
 			el.style.transform = "";
 			el.style.top = `${Math.round(anchorTop)}px`;
 			el.style.left = `${Math.round(anchorLeft)}px`;
