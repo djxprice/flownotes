@@ -697,6 +697,47 @@ function getCanvasSvg() {
 	return best || all[0];
 }
 
+function getWindowOffsetToTop(win) {
+	let dx = 0, dy = 0;
+	try {
+		let w = win;
+		while (w && w !== window.top) {
+			const fe = w.frameElement;
+			if (!fe) break;
+			const r = fe.getBoundingClientRect();
+			dx += r.left;
+			dy += r.top;
+			w = w.parent;
+		}
+	} catch {}
+	return { dx, dy };
+}
+
+function svgToTopCoords(svg, x, y) {
+	try {
+		const m = svg.getScreenCTM();
+		if (!m) return null;
+		const pt = new DOMPoint(x, y).matrixTransform(m);
+		const off = getWindowOffsetToTop(svg.ownerDocument.defaultView || window);
+		return { x: pt.x + off.dx, y: pt.y + off.dy };
+	} catch {
+		return null;
+	}
+}
+
+function topToSvgCoords(svg, x, y) {
+	try {
+		const off = getWindowOffsetToTop(svg.ownerDocument.defaultView || window);
+		const localScreen = new DOMPoint(x - off.dx, y - off.dy);
+		const inv = svg.getScreenCTM() && svg.getScreenCTM().inverse ? svg.getScreenCTM().inverse() : null;
+		if (!inv) return null;
+		const local = localScreen.matrixTransform(inv);
+		return { x: local.x, y: local.y };
+	} catch {
+		return null;
+	}
+}
+
 function getCanvasRect() {
 	const svg = getCanvasSvg();
 	if (!svg) {
@@ -705,7 +746,9 @@ function getCanvasRect() {
 		const vh = window.innerHeight || 800;
 		return { top: 0, left: 0, width: vw, height: vh };
 	}
-	return svg.getBoundingClientRect();
+	const r = svg.getBoundingClientRect();
+	const off = getWindowOffsetToTop(svg.ownerDocument?.defaultView || window);
+	return { top: r.top + off.dy, left: r.left + off.dx, width: r.width, height: r.height };
 }
 
 // Reposition displayed notes to stay anchored to the canvas rect
