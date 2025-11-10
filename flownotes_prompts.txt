@@ -61,6 +61,12 @@ Prompts to recreate the FlowNotes Chrome extension project from scratch:
 11) Note+ popout
 - Implement a click handler for “Note+” that opens a small draggable popout with a textarea
 - Place the popout near the toolbar; include a close (×) button
+ - Add “Save & Close” to persist a record via REST:
+   - POST /services/data/v60.0/sobjects/FlowNote__c with fields:
+     - FlowId__c (from URL param flowId)
+     - NoteText__c
+     - PosTop__c, PosLeft__c (from popout position)
+     - CanvasUrl__c (top window URL)
 
 12) Salesforce metadata for persisting notes
 - Create MDAPI package under `salesforce_mdapi/` with:

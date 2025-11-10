@@ -39,6 +39,11 @@ Notes:
 
 ---
 
+### Notes popout
+- Click “Note+” on the Flow toolbar to open a small popout with a text area.
+- The popout is draggable and can be closed (×). It appears near the toolbar and can be repositioned.
+- “Save & Close” persists the note to Salesforce as a `FlowNote__c` record (fields include `FlowId__c`, `NoteText__c`, `PosTop__c`, `PosLeft__c`, and `CanvasUrl__c`), then closes the popout.
+
 
 ### 2) Configure the Extension
 No Salesforce configuration is required. Ensure the extension has:

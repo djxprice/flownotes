@@ -57,6 +57,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 // -------------------------------------------------------------------
 const FLOW_TOOLBAR_ID = "flownotes-toolbar";
 let lastUrlObserved = location.href;
+let toolbarElRef = null;
 
 function isFlowBuilderLocation() {
 	// Strict match on the top window URL for Flow Builder canvas
@@ -139,16 +140,14 @@ function injectToolbar(targetDoc) {
 	noteBtn.textContent = "Note+";
 	// Prevent drag start when clicking the button
 	noteBtn.addEventListener("mousedown", (e) => e.stopPropagation());
-	noteBtn.addEventListener("click", () => {
-		// Placeholder: later can open a note input or send message
-		console.log("[FlowNotes] Note+ clicked");
-	});
+	noteBtn.addEventListener("click", openNotePopover);
 	root.appendChild(title);
 	root.appendChild(noteBtn);
 	(targetDoc.body || targetDoc.documentElement).appendChild(container);
 
 	makeDraggable(root);
 	restoreToolbarPosition(root);
+	toolbarElRef = root;
 }
 
 function makeDraggable(moveEl) {
@@ -232,6 +231,181 @@ function watchRouteChanges() {
 	// Observe DOM mutations as Lightning often swaps frames/content
 	const mo = new MutationObserver(() => ensureToolbarMounted());
 	mo.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+// -------------------------------------------------------------------
+// Note popout
+// -------------------------------------------------------------------
+const NOTE_POPOUT_ID = "flownotes-note-popout";
+
+function openNotePopover() {
+	const doc = getTargetDocument();
+	let pop = doc.getElementById(NOTE_POPOUT_ID);
+	if (pop) {
+		const ta = pop.querySelector("textarea");
+		if (ta) ta.focus();
+		return;
+	}
+	pop = doc.createElement("div");
+	pop.id = NOTE_POPOUT_ID;
+	Object.assign(pop.style, {
+		position: "fixed",
+		zIndex: "2147483647",
+		background: "rgba(28,37,65,0.98)",
+		color: "#e6ecf1",
+		border: "1px solid rgba(255,255,255,0.12)",
+		boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+		borderRadius: "10px",
+		width: "300px",
+		padding: "8px",
+		backdropFilter: "blur(4px)"
+	});
+	// Position near toolbar if available
+	let defaultTop = 160;
+	let defaultLeft = 24;
+	try {
+		if (toolbarElRef) {
+			const r = toolbarElRef.getBoundingClientRect();
+			defaultTop = Math.min((window.innerHeight || 800) - 200, r.bottom + 10);
+			defaultLeft = Math.max(10, Math.min((window.innerWidth || 1200) - 320, r.left));
+		}
+	} catch {}
+	pop.style.top = `${defaultTop}px`;
+	pop.style.left = `${defaultLeft}px`;
+
+	// Header (draggable)
+	const header = doc.createElement("div");
+	Object.assign(header.style, {
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: "8px",
+		marginBottom: "6px",
+		cursor: "move"
+	});
+	const title = doc.createElement("div");
+	title.textContent = "Note";
+	title.style.font = "600 12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+	title.style.opacity = "0.9";
+	const closeBtn = doc.createElement("button");
+	closeBtn.textContent = "×";
+	closeBtn.title = "Close";
+	Object.assign(closeBtn.style, {
+		all: "unset",
+		width: "22px",
+		height: "22px",
+		lineHeight: "22px",
+		textAlign: "center",
+		borderRadius: "6px",
+		cursor: "pointer",
+		background: "rgba(255,255,255,0.08)"
+	});
+	closeBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+	closeBtn.addEventListener("click", () => pop.remove());
+	header.appendChild(title);
+	header.appendChild(closeBtn);
+
+	// Text area
+	const ta = doc.createElement("textarea");
+	Object.assign(ta.style, {
+		width: "100%",
+		height: "120px",
+		resize: "vertical",
+		border: "1px solid rgba(255,255,255,0.12)",
+		background: "rgba(12,18,32,0.9)",
+		color: "#e6ecf1",
+		borderRadius: "6px",
+		padding: "8px",
+		font: "13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+		boxSizing: "border-box"
+	});
+	ta.placeholder = "Type a quick note…";
+	ta.addEventListener("mousedown", (e) => e.stopPropagation());
+
+	// Footer with Save & Close
+	const footer = doc.createElement("div");
+	Object.assign(footer.style, {
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "flex-end",
+		gap: "8px",
+		marginTop: "8px"
+	});
+	const saveBtn = doc.createElement("button");
+	saveBtn.textContent = "Save & Close";
+	Object.assign(saveBtn.style, {
+		all: "unset",
+		font: "600 12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+		padding: "6px 10px",
+		background: "#5bc0be",
+		color: "#08121f",
+		borderRadius: "8px",
+		cursor: "pointer"
+	});
+	saveBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+	saveBtn.addEventListener("click", async () => {
+		try {
+			const noteText = (ta.value || "").trim();
+			const topHref = (() => {
+				try { return window.top.location.href || window.location.href; } catch { return window.location.href; }
+			})();
+			const flowId = parseFlowIdFromUrl(topHref);
+			if (!flowId) {
+				alert("Could not determine Flow Id from URL. Note not saved.");
+				return;
+			}
+			const rect = pop.getBoundingClientRect();
+			const payload = {
+				FlowId__c: flowId,
+				FlowApiName__c: null,
+				NoteText__c: noteText,
+				PosTop__c: Math.round(rect.top),
+				PosLeft__c: Math.round(rect.left),
+				CanvasUrl__c: topHref
+			};
+			await createFlowNote(payload);
+			pop.remove();
+		} catch (err) {
+			console.warn("[FlowNotes] Save failed", err);
+			alert("Failed to save note. See console for details.");
+		}
+	});
+	footer.appendChild(saveBtn);
+
+	pop.appendChild(header);
+	pop.appendChild(ta);
+	pop.appendChild(footer);
+	(doc.body || doc.documentElement).appendChild(pop);
+	makeDraggable(pop);
+	setTimeout(() => ta.focus(), 0);
+}
+
+function parseFlowIdFromUrl(href) {
+	try {
+		const u = new URL(href);
+		return u.searchParams.get("flowId");
+	} catch {
+		return null;
+	}
+}
+
+async function createFlowNote(fields) {
+	// POST to REST sObject endpoint using same-origin fetch with cookies
+	const res = await fetch("/services/data/v60.0/sobjects/FlowNote__c", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			"Accept": "application/json"
+		},
+		credentials: "include",
+		body: JSON.stringify(fields)
+	});
+	if (!res.ok) {
+		let detail = "";
+		try { detail = await res.text(); } catch {}
+		throw new Error(`HTTP ${res.status} ${detail}`);
+	}
+	return await res.json();
 }
 
 // Initialize in all frames (Flow Builder may render within an inner frame)
