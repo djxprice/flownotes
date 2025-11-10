@@ -546,6 +546,8 @@ async function maybePatchDeferred(recordId, deferredUpdate, access) {
 // Display notes for current flow
 // -------------------------------------------------------------------
 const DISPLAY_NOTE_CLASS = "flownotes-note-display";
+const MIN_DRAW_SCALE = 0.2;
+const MAX_DRAW_SCALE = 2.0;
 let baselineCanvasRect = null;
 
 async function displayNotesForCurrentFlow() {
@@ -730,9 +732,11 @@ function layoutDisplayedNotes() {
 		if (m && Number.isFinite(anchorLeft) && Number.isFinite(anchorTop)) {
 			el.style.display = "";
 			// Prefer translate + scale using CTM uniform scale to avoid double-translation issues
-			const s = (function() {
+			let s = (function() {
 				try { return Math.min(Math.hypot(m.a, m.b) || 1, Math.hypot(m.c, m.d) || 1); } catch { return 1; }
 			})();
+			// Clamp draw scale for visibility at extreme zoom levels
+			s = Math.max(MIN_DRAW_SCALE, Math.min(MAX_DRAW_SCALE, s));
 			el.style.transformOrigin = "0 0";
 			el.style.transform = `translate(${Math.round(anchorLeft)}px, ${Math.round(anchorTop)}px) scale(${s})`;
 			el.style.top = "";
