@@ -58,6 +58,23 @@ Prompts to recreate the FlowNotes Chrome extension project from scratch:
 - Persist toolbar position in localStorage and remove it when leaving Flow Builder
 - Default position: near top-left; user can reposition and it will be remembered
 
+11) Note+ popout
+- Implement a click handler for “Note+” that opens a small draggable popout with a textarea
+- Place the popout near the toolbar; include a close (×) button
+
+12) Salesforce metadata for persisting notes
+- Create MDAPI package under `salesforce_mdapi/` with:
+  - `objects/FlowNote__c.object`
+  - `package.xml`
+- Fields:
+  - FlowId__c (Text 18, required) — flowId from canvas URL
+  - FlowApiName__c (Text 80) — optional
+  - NoteText__c (Long Text Area) — note body
+  - PosTop__c (Number), PosLeft__c (Number) — popup coordinates (px)
+  - CanvasUrl__c (URL) — optional
+- Deploy via CLI:
+  - sfdx force:mdapi:deploy -d salesforce_mdapi -u <alias> -w -1
+
 10) Initialize version control (Git)
 - Open terminal in project root
 - If needed on Windows: install Git → winget install --id Git.Git -e --silent --accept-package-agreements --accept-source-agreements

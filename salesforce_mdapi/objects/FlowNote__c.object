@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+	<fullName>FlowNote__c</fullName>
+	<label>Flow Note</label>
+	<pluralLabel>Flow Notes</pluralLabel>
+	<nameField>
+		<type>AutoNumber</type>
+		<label>Flow Note Number</label>
+		<displayFormat>FN-{00000}</displayFormat>
+	</nameField>
+	<deploymentStatus>Deployed</deploymentStatus>
+	<sharingModel>ReadWrite</sharingModel>
+	<enableActivities>false</enableActivities>
+	<enableFeeds>false</enableFeeds>
+	<allowInChatterGroups>false</allowInChatterGroups>
+
+	<fields>
+		<fullName>FlowId__c</fullName>
+		<label>Flow Id</label>
+		<type>Text</type>
+		<length>18</length>
+		<required>true</required>
+	</fields>
+
+	<fields>
+		<fullName>FlowApiName__c</fullName>
+		<label>Flow API Name</label>
+		<type>Text</type>
+		<length>80</length>
+		<required>false</required>
+	</fields>
+
+	<fields>
+		<fullName>NoteText__c</fullName>
+		<label>Note Text</label>
+		<type>LongTextArea</type>
+		<visibleLines>10</visibleLines>
+		<length>32768</length>
+		<required>true</required>
+	</fields>
+
+	<fields>
+		<fullName>PosTop__c</fullName>
+		<label>Popup Top (px)</label>
+		<type>Number</type>
+		<precision>6</precision>
+		<scale>0</scale>
+		<required>false</required>
+	</fields>
+
+	<fields>
+		<fullName>PosLeft__c</fullName>
+		<label>Popup Left (px)</label>
+		<type>Number</type>
+		<precision>6</precision>
+		<scale>0</scale>
+		<required>false</required>
+	</fields>
+
+	<fields>
+		<fullName>CanvasUrl__c</fullName>
+		<label>Canvas URL</label>
+		<type>Url</type>
+		<required>false</required>
+	</fields>
+</CustomObject>
+
+
