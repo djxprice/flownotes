@@ -45,6 +45,9 @@ Notes:
 - “Save & Close” persists the note to Salesforce as a `FlowNote__c` record (fields include `FlowId__c`, `NoteText__c`, `PosTop__c`, `PosLeft__c`, and `CanvasUrl__c`), then closes the popout.
   - If your profile lacks Field-Level Security to create/update certain fields, the extension will still create the record and then attempt a PATCH for fields that are updateable. Ask an admin to grant create/update FLS on these fields for full functionality.
 
+### Display notes
+- Click “Display” on the Flow toolbar to render all notes (`FlowNote__c`) for the current canvas’s `flowId`.
+- Notes are shown as sticky cards at their saved positions; you can drag and close individual cards.
 
 ### 2) Configure the Extension
 No Salesforce configuration is required. Ensure the extension has:

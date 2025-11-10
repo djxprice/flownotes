@@ -81,6 +81,11 @@ Prompts to recreate the FlowNotes Chrome extension project from scratch:
 - Deploy via CLI:
   - sfdx force:mdapi:deploy -d salesforce_mdapi -u <alias> -w -1
 
+13) Display all notes for the current flow
+- Add a “Display” button next to “Note+” on the toolbar
+- Query via REST SOQL: SELECT Id, NoteText__c, PosTop__c, PosLeft__c, CanvasUrl__c FROM FlowNote__c WHERE FlowId__c = '<flowId>' ORDER BY CreatedDate
+- Render each note as a draggable sticky at saved positions; close (×) to dismiss
+
 10) Initialize version control (Git)
 - Open terminal in project root
 - If needed on Windows: install Git → winget install --id Git.Git -e --silent --accept-package-agreements --accept-source-agreements

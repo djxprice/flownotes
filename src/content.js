@@ -141,8 +141,21 @@ function injectToolbar(targetDoc) {
 	// Prevent drag start when clicking the button
 	noteBtn.addEventListener("mousedown", (e) => e.stopPropagation());
 	noteBtn.addEventListener("click", openNotePopover);
+	// Display button
+	const displayBtn = targetDoc.createElement("button");
+	displayBtn.style.all = "unset";
+	displayBtn.style.font = "600 12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+	displayBtn.style.padding = "6px 10px";
+	displayBtn.style.background = "rgba(255,255,255,0.16)";
+	displayBtn.style.color = "#e6ecf1";
+	displayBtn.style.borderRadius = "8px";
+	displayBtn.style.cursor = "pointer";
+	displayBtn.textContent = "Display";
+	displayBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+	displayBtn.addEventListener("click", displayNotesForCurrentFlow);
 	root.appendChild(title);
 	root.appendChild(noteBtn);
+	root.appendChild(displayBtn);
 	(targetDoc.body || targetDoc.documentElement).appendChild(container);
 
 	makeDraggable(root);
@@ -501,6 +514,125 @@ async function maybePatchDeferred(recordId, deferredUpdate, access) {
 	}
 }
 
+// -------------------------------------------------------------------
+// Display notes for current flow
+// -------------------------------------------------------------------
+const DISPLAY_NOTE_CLASS = "flownotes-note-display";
+
+async function displayNotesForCurrentFlow() {
+	try {
+		const href = (() => { try { return window.top.location.href; } catch { return window.location.href; } })();
+		const flowId = parseFlowIdFromUrl(href);
+		if (!flowId) {
+			alert("Could not determine Flow Id from URL.");
+			return;
+		}
+		clearDisplayedNotes();
+		const soql = `SELECT Id, NoteText__c, PosTop__c, PosLeft__c, CanvasUrl__c FROM FlowNote__c WHERE FlowId__c = '${escapeSoqlLiteral(flowId)}' ORDER BY CreatedDate ASC`;
+		const res = await chrome.runtime.sendMessage({
+			type: "proxy",
+			path: `/services/data/v60.0/query?q=${encodeURIComponent(soql)}`,
+			method: "GET"
+		});
+		if (!res?.ok) {
+			throw new Error(`HTTP ${res?.status || ""} ${res?.body || res?.error || ""}`);
+		}
+		let data = {};
+		try { data = JSON.parse(res.body || "{}"); } catch {}
+		const records = Array.isArray(data?.records) ? data.records : [];
+		const doc = getTargetDocument();
+		let idx = 0;
+		for (const r of records) {
+			renderDisplayNote(doc, r, idx++);
+		}
+		if (records.length === 0) {
+			alert("No notes found for this flow.");
+		}
+	} catch (e) {
+		console.warn("[FlowNotes] Display failed", e);
+		alert("Failed to display notes. See console for details.");
+	}
+}
+
+function clearDisplayedNotes() {
+	const doc = getTargetDocument();
+	doc.querySelectorAll(`.${DISPLAY_NOTE_CLASS}`).forEach(el => el.remove());
+}
+
+function renderDisplayNote(doc, rec, index) {
+	const el = doc.createElement("div");
+	el.className = DISPLAY_NOTE_CLASS;
+	Object.assign(el.style, {
+		position: "fixed",
+		zIndex: "2147483647",
+		background: "rgba(255,255,160,0.95)",
+		color: "#202020",
+		border: "1px solid rgba(0,0,0,0.2)",
+		boxShadow: "0 8px 18px rgba(0,0,0,0.25)",
+		borderRadius: "8px",
+		width: "260px",
+		maxWidth: "40vw",
+		padding: "8px"
+	});
+	// Position
+	let top = (typeof rec?.PosTop__c === "number") ? rec.PosTop__c : 120 + index * 24;
+	let left = (typeof rec?.PosLeft__c === "number") ? rec.PosLeft__c : 24;
+	const maxTop = Math.max(0, (window.innerHeight || 800) - 160);
+	const maxLeft = Math.max(0, (window.innerWidth || 1200) - 300);
+	top = Math.min(Math.max(0, top), maxTop);
+	left = Math.min(Math.max(0, left), maxLeft);
+	el.style.top = `${top}px`;
+	el.style.left = `${left}px`;
+
+	// Header
+	const header = doc.createElement("div");
+	Object.assign(header.style, {
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: "8px",
+		marginBottom: "6px",
+		cursor: "move"
+	});
+	const title = doc.createElement("div");
+	title.textContent = `Note`;
+	title.style.font = "600 12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+	title.style.opacity = "0.9";
+	const closeBtn = doc.createElement("button");
+	closeBtn.textContent = "×";
+	closeBtn.title = "Close";
+	Object.assign(closeBtn.style, {
+		all: "unset",
+		width: "22px",
+		height: "22px",
+		lineHeight: "22px",
+		textAlign: "center",
+		borderRadius: "6px",
+		cursor: "pointer",
+		background: "rgba(0,0,0,0.08)"
+	});
+	closeBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+	closeBtn.addEventListener("click", () => el.remove());
+	header.appendChild(title);
+	header.appendChild(closeBtn);
+
+	// Body
+	const body = doc.createElement("div");
+	Object.assign(body.style, {
+		whiteSpace: "pre-wrap",
+		font: "13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+	});
+	body.textContent = rec?.NoteText__c || "(no text)";
+
+	el.appendChild(header);
+	el.appendChild(body);
+	(doc.body || doc.documentElement).appendChild(el);
+	makeDraggable(el);
+}
+
+function escapeSoqlLiteral(value) {
+	return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
 // Initialize in all frames (Flow Builder may render within an inner frame)
 ensureToolbarMounted();
 // Re-check shortly after initial load in case Lightning router updated late
