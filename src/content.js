@@ -357,7 +357,6 @@ function openNotePopover() {
 			const rect = pop.getBoundingClientRect();
 			const payload = {
 				FlowId__c: flowId,
-				FlowApiName__c: null,
 				NoteText__c: noteText,
 				PosTop__c: Math.round(rect.top),
 				PosLeft__c: Math.round(rect.left),
