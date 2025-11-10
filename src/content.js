@@ -549,6 +549,7 @@ const DISPLAY_NOTE_CLASS = "flownotes-note-display";
 const MIN_VISIBLE_SCALE = 0.5;
 const MAX_SCALE = 2.0;
 let baselineCanvasRect = null;
+let baselineCanvasScale = null;
 
 async function displayNotesForCurrentFlow() {
 	try {
@@ -559,8 +560,12 @@ async function displayNotesForCurrentFlow() {
 			return;
 		}
 		clearDisplayedNotes();
-		// Set baseline canvas rect for scaling
+		// Set baseline canvas rect and scale for scaling
 		baselineCanvasRect = getCanvasRect();
+		const svg0 = getCanvasSvg();
+		baselineCanvasScale = svg0 && typeof svg0.getScreenCTM === "function"
+			? getCtmUniformScale(svg0.getScreenCTM())
+			: (baselineCanvasRect?.width || 1);
 		const soql = `SELECT Id, NoteText__c, PosTop__c, PosLeft__c, CanvasUrl__c FROM FlowNote__c WHERE FlowId__c = '${escapeSoqlLiteral(flowId)}' ORDER BY CreatedDate ASC`;
 		const res = await chrome.runtime.sendMessage({
 			type: "proxy",
@@ -711,23 +716,23 @@ function layoutDisplayedNotes() {
 	const rect = getCanvasRect();
 	const svg = getCanvasSvg();
 	if (!baselineCanvasRect) baselineCanvasRect = rect;
-	let scaleX = 1, scaleY = 1;
+	let scale = 1;
 	if (svg && typeof svg.getScreenCTM === "function") {
 		try {
 			const m = svg.getScreenCTM();
-			scaleX = Math.hypot(m.a, m.b) || 1;
-			scaleY = Math.hypot(m.c, m.d) || 1;
+			const current = getCtmUniformScale(m);
+			const base = baselineCanvasScale || current || 1;
+			scale = (current || 1) / (base || 1);
 		} catch {
-			scaleX = rect.width && baselineCanvasRect.width ? rect.width / baselineCanvasRect.width : 1;
-			scaleY = rect.height && baselineCanvasRect.height ? rect.height / baselineCanvasRect.height : 1;
+			// fallback to rect ratio
+			scale = (rect.width && baselineCanvasRect.width) ? (rect.width / baselineCanvasRect.width) : 1;
 		}
 	} else {
-		scaleX = rect.width && baselineCanvasRect.width ? rect.width / baselineCanvasRect.width : 1;
-		scaleY = rect.height && baselineCanvasRect.height ? rect.height / baselineCanvasRect.height : 1;
+		scale = (rect.width && baselineCanvasRect.width) ? (rect.width / baselineCanvasRect.width) : 1;
 	}
-	// Use uniform scaling; only clamp upper bound
-	let scale = Math.min(MAX_SCALE, Math.min(scaleX, scaleY) || 1);
-	scaleX = scaleY = scale;
+	// Clamp only upper bound
+	scale = Math.min(MAX_SCALE, scale || 1);
+	const scaleX = scale, scaleY = scale;
 	const key = `${Math.round(rect.top)}|${Math.round(rect.left)}|${Math.round(rect.width)}|${Math.round(rect.height)}`;
 	lastCanvasRectKey = key;
 	const doc = getTargetDocument();
@@ -765,6 +770,14 @@ function layoutDisplayedNotes() {
 		el.style.top = `${Math.round(anchorTop)}px`;
 		el.style.left = `${Math.round(anchorLeft)}px`;
 	}
+}
+
+function getCtmUniformScale(m) {
+	// Uniform scale from CTM; assumes negligible rotation/skew in Flow canvas
+	const sx = Math.hypot(m.a, m.b) || 1;
+	const sy = Math.hypot(m.c, m.d) || 1;
+	// Use min to keep element aspect consistent with canvas behavior
+	return Math.min(sx, sy);
 }
 // Initialize in all frames (Flow Builder may render within an inner frame)
 ensureToolbarMounted();
