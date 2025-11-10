@@ -78,6 +78,7 @@ Prompts to recreate the FlowNotes Chrome extension project from scratch:
   - NoteText__c (Long Text Area) — note body
   - PosTop__c (Number), PosLeft__c (Number) — popup coordinates (px)
   - CanvasUrl__c (URL) — optional
+  - TLX__c,TLY__c,TRX__c,TRY__c,BLX__c,BLY__c,BRX__c,BRY__c — four-corner anchors (SVG-local)
 - Deploy via CLI:
   - sfdx force:mdapi:deploy -d salesforce_mdapi -u <alias> -w -1
 

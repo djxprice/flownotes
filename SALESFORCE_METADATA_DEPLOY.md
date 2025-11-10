@@ -13,6 +13,8 @@ Key fields
 - `PosTop__c` (Number): Popup top (px)
 - `PosLeft__c` (Number): Popup left (px)
 - `CanvasUrl__c` (URL): Full canvas URL (optional)
+ - Four-corner anchors (SVG-local units), for precise placement across zoom/pan:
+   - `TLX__c`,`TLY__c`,`TRX__c`,`TRY__c`,`BLX__c`,`BLY__c`,`BRX__c`,`BRY__c`
 
 Deploy with Salesforce CLI (Metadata API format)
 

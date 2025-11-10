@@ -394,10 +394,13 @@ function openNotePopover() {
 			const rect = pop.getBoundingClientRect();
 			// Convert top-window coords to SVG canvas-local coords for zoom/pan invariance
 			const node = getCanvasTransformNode() || getCanvasSvg();
-			const local = node ? topToSvgCoords(node, rect.left, rect.top) : null;
+			const tl = node ? topToSvgCoords(node, rect.left, rect.top) : null;
+			const tr = node ? topToSvgCoords(node, rect.right, rect.top) : null;
+			const bl = node ? topToSvgCoords(node, rect.left, rect.bottom) : null;
+			const br = node ? topToSvgCoords(node, rect.right, rect.bottom) : null;
 			const canvasRect = getCanvasRect();
-			const relLeft = Math.round(local ? local.x : (rect.left - canvasRect.left));
-			const relTop = Math.round(local ? local.y : (rect.top - canvasRect.top));
+			const relLeft = Math.round(tl ? tl.x : (rect.left - canvasRect.left));
+			const relTop = Math.round(tl ? tl.y : (rect.top - canvasRect.top));
 			// Persist current canvas scale locally for better fallback math later
 			try {
 				const curScale = getCanvasScale();
@@ -408,7 +411,15 @@ function openNotePopover() {
 				NoteText__c: noteText,
 				PosTop__c: relTop,
 				PosLeft__c: relLeft,
-				CanvasUrl__c: topHref
+				CanvasUrl__c: topHref,
+				TLX__c: tl ? Number(tl.x.toFixed(5)) : null,
+				TLY__c: tl ? Number(tl.y.toFixed(5)) : null,
+				TRX__c: tr ? Number(tr.x.toFixed(5)) : null,
+				TRY__c: tr ? Number(tr.y.toFixed(5)) : null,
+				BLX__c: bl ? Number(bl.x.toFixed(5)) : null,
+				BLY__c: bl ? Number(bl.y.toFixed(5)) : null,
+				BRX__c: br ? Number(br.x.toFixed(5)) : null,
+				BRY__c: br ? Number(br.y.toFixed(5)) : null
 			};
 			await createFlowNote(payload);
 			pop.remove();
@@ -485,6 +496,19 @@ async function createFlowNote(fields) {
 	try { created = JSON.parse(createRes.body || "{}"); } catch {}
 	await maybePatchDeferred(created?.id, deferredUpdate, access);
 	return created;
+}
+
+async function updateFlowNote(id, fields) {
+	const res = await chrome.runtime.sendMessage({
+		type: "proxy",
+		path: `/services/data/v60.0/sobjects/FlowNote__c/${encodeURIComponent(id)}`,
+		method: "PATCH",
+		body: fields
+	});
+	if (!res?.ok) {
+		throw new Error(`HTTP ${res?.status || ""} ${res?.body || res?.error || ""}`.trim());
+	}
+	return true;
 }
 
 function extractMissingFieldNames(detail) {
@@ -598,23 +622,23 @@ function clearDisplayedNotes() {
 }
 
 function renderDisplayNote(doc, rec, index) {
+	// Reuse creation popout UI, but prefill and update on save
 	const el = doc.createElement("div");
 	el.className = DISPLAY_NOTE_CLASS;
 	Object.assign(el.style, {
 		position: "fixed",
 		zIndex: "2147483647",
-		background: "rgba(255,255,160,0.95)",
-		color: "#202020",
-		border: "1px solid rgba(0,0,0,0.2)",
-		boxShadow: "0 8px 18px rgba(0,0,0,0.25)",
-		borderRadius: "8px",
-		width: "260px",
-		maxWidth: "40vw",
+		background: "rgba(28,37,65,0.98)",
+		color: "#e6ecf1",
+		border: "1px solid rgba(255,255,255,0.12)",
+		boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+		borderRadius: "10px",
+		backdropFilter: "blur(4px)",
 		padding: "8px"
 	});
-	// Save canvas-relative coords in dataset for responsive layout
-	const savedTop = (typeof rec?.PosTop__c === "number") ? rec.PosTop__c : 120 + index * 24;
-	const savedLeft = (typeof rec?.PosLeft__c === "number") ? rec.PosLeft__c : 24;
+	// Dataset for canvas-local coords
+	const savedTop = typeof rec?.TLY__c === "number" ? rec.TLY__c : (typeof rec?.PosTop__c === "number" ? rec.PosTop__c : 120 + index * 24);
+	const savedLeft = typeof rec?.TLX__c === "number" ? rec.TLX__c : (typeof rec?.PosLeft__c === "number" ? rec.PosLeft__c : 24);
 	el.dataset.canvasTop = String(savedTop);
 	el.dataset.canvasLeft = String(savedLeft);
 
@@ -629,7 +653,7 @@ function renderDisplayNote(doc, rec, index) {
 		cursor: "move"
 	});
 	const title = doc.createElement("div");
-	title.textContent = `Note`;
+	title.textContent = "Note";
 	title.style.font = "600 12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
 	title.style.opacity = "0.9";
 	const closeBtn = doc.createElement("button");
@@ -643,27 +667,106 @@ function renderDisplayNote(doc, rec, index) {
 		textAlign: "center",
 		borderRadius: "6px",
 		cursor: "pointer",
-		background: "rgba(0,0,0,0.08)"
+		background: "rgba(255,255,255,0.08)"
 	});
 	closeBtn.addEventListener("mousedown", (e) => e.stopPropagation());
 	closeBtn.addEventListener("click", () => el.remove());
 	header.appendChild(title);
 	header.appendChild(closeBtn);
 
-	// Body
-	const body = doc.createElement("div");
-	Object.assign(body.style, {
-		whiteSpace: "pre-wrap",
-		font: "13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+	// Text area
+	const ta = doc.createElement("textarea");
+	Object.assign(ta.style, {
+		width: "100%",
+		height: "120px",
+		resize: "vertical",
+		border: "1px solid rgba(255,255,255,0.12)",
+		background: "rgba(12,18,32,0.9)",
+		color: "#e6ecf1",
+		borderRadius: "6px",
+		padding: "8px",
+		font: "13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+		boxSizing: "border-box"
 	});
-	body.textContent = rec?.NoteText__c || "(no text)";
+	ta.value = rec?.NoteText__c || "";
+	ta.addEventListener("mousedown", (e) => e.stopPropagation());
+
+	// Footer with Update & Close
+	const footer = doc.createElement("div");
+	Object.assign(footer.style, {
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "flex-end",
+		gap: "8px",
+		marginTop: "8px"
+	});
+	const saveBtn = doc.createElement("button");
+	saveBtn.textContent = "Update & Close";
+	Object.assign(saveBtn.style, {
+		all: "unset",
+		font: "600 12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+		padding: "6px 10px",
+		background: "#5bc0be",
+		color: "#08121f",
+		borderRadius: "8px",
+		cursor: "pointer"
+	});
+	saveBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+	saveBtn.addEventListener("click", async () => {
+		try {
+			const node = getCanvasTransformNode() || getCanvasSvg();
+			const rect = el.getBoundingClientRect();
+			const tl = node ? topToSvgCoords(node, rect.left, rect.top) : null;
+			const tr = node ? topToSvgCoords(node, rect.right, rect.top) : null;
+			const bl = node ? topToSvgCoords(node, rect.left, rect.bottom) : null;
+			const br = node ? topToSvgCoords(node, rect.right, rect.bottom) : null;
+			const fields = {
+				NoteText__c: ta.value || "",
+				TLX__c: tl ? Number(tl.x.toFixed(5)) : null,
+				TLY__c: tl ? Number(tl.y.toFixed(5)) : null,
+				TRX__c: tr ? Number(tr.x.toFixed(5)) : null,
+				TRY__c: tr ? Number(tr.y.toFixed(5)) : null,
+				BLX__c: bl ? Number(bl.x.toFixed(5)) : null,
+				BLY__c: bl ? Number(bl.y.toFixed(5)) : null,
+				BRX__c: br ? Number(br.x.toFixed(5)) : null,
+				BRY__c: br ? Number(br.y.toFixed(5)) : null
+			};
+			await updateFlowNote(rec.Id, fields);
+			el.remove();
+		} catch (e) {
+			console.warn("[FlowNotes] Update failed", e);
+			alert("Failed to update note.");
+		}
+	});
+	footer.appendChild(saveBtn);
 
 	el.appendChild(header);
-	el.appendChild(body);
+	el.appendChild(ta);
+	el.appendChild(footer);
 	(doc.body || doc.documentElement).appendChild(el);
 	makeDraggable(el);
-	// Initial layout
-	layoutDisplayedNotes();
+
+	// Position and size based on anchors
+	const node = getCanvasTransformNode() || getCanvasSvg();
+	const tl = (typeof rec?.TLX__c === "number" && typeof rec?.TLY__c === "number") ? { x: rec.TLX__c, y: rec.TLY__c } : null;
+	const tr = (typeof rec?.TRX__c === "number" && typeof rec?.TRY__c === "number") ? { x: rec.TRX__c, y: rec.TRY__c } : null;
+	const bl = (typeof rec?.BLX__c === "number" && typeof rec?.BLY__c === "number") ? { x: rec.BLX__c, y: rec.BLY__c } : null;
+	if (node && tl && tr && bl) {
+		const tlS = svgToTopCoords(node, tl.x, tl.y);
+		const trS = svgToTopCoords(node, tr.x, tr.y);
+		const blS = svgToTopCoords(node, bl.x, bl.y);
+		if (tlS && trS && blS) {
+			const width = Math.max(120, Math.round(Math.hypot(trS.x - tlS.x, trS.y - tlS.y)));
+			const height = Math.max(80, Math.round(Math.hypot(blS.x - tlS.x, blS.y - tlS.y)));
+			el.style.width = `${width}px`;
+			el.style.height = `${height}px`;
+			el.style.top = `${Math.round(tlS.y)}px`;
+			el.style.left = `${Math.round(tlS.x)}px`;
+		}
+	} else {
+		// Fallback to previous single-point method
+		layoutDisplayedNotes();
+	}
 }
 
 function escapeSoqlLiteral(value) {
