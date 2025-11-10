@@ -729,12 +729,12 @@ function layoutDisplayedNotes() {
 		// When CTM is available, prefer matrix placement for accuracy
 		if (m && Number.isFinite(anchorLeft) && Number.isFinite(anchorTop)) {
 			el.style.display = "";
-			// CSS matrix(a,b,c,d,e,f) corresponds to [ [a c e], [b d f], [0 0 1] ]
-			const tx = anchorLeft;
-			const ty = anchorTop;
+			// Prefer translate + scale using CTM uniform scale to avoid double-translation issues
+			const s = (function() {
+				try { return Math.min(Math.hypot(m.a, m.b) || 1, Math.hypot(m.c, m.d) || 1); } catch { return 1; }
+			})();
 			el.style.transformOrigin = "0 0";
-			el.style.transform = `matrix(${m.a}, ${m.b}, ${m.c}, ${m.d}, ${Math.round(tx)}, ${Math.round(ty)})`;
-			// Clear top/left to avoid interference
+			el.style.transform = `translate(${Math.round(anchorLeft)}px, ${Math.round(anchorTop)}px) scale(${s})`;
 			el.style.top = "";
 			el.style.left = "";
 			continue;
