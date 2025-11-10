@@ -755,7 +755,7 @@ function layoutDisplayedNotes() {
 			anchorLeft >= -margin &&
 			anchorTop <= (window.innerHeight || 800) + margin &&
 			anchorLeft <= (window.innerWidth || 1200) + margin;
-		if (!inView || scale < MIN_VISIBLE_SCALE) {
+		if (!inView) {
 			el.style.display = "none";
 			continue;
 		}
