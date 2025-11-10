@@ -36,7 +36,6 @@
 		<type>LongTextArea</type>
 		<visibleLines>10</visibleLines>
 		<length>32768</length>
-		<required>true</required>
 	</fields>
 
 	<fields>
