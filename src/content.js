@@ -546,10 +546,7 @@ async function maybePatchDeferred(recordId, deferredUpdate, access) {
 // Display notes for current flow
 // -------------------------------------------------------------------
 const DISPLAY_NOTE_CLASS = "flownotes-note-display";
-const MIN_VISIBLE_SCALE = 0.5;
-const MAX_SCALE = 2.0;
 let baselineCanvasRect = null;
-let baselineCanvasScale = null;
 
 async function displayNotesForCurrentFlow() {
 	try {
@@ -560,12 +557,8 @@ async function displayNotesForCurrentFlow() {
 			return;
 		}
 		clearDisplayedNotes();
-		// Set baseline canvas rect and scale for scaling
+		// Set baseline canvas rect for fallback positioning
 		baselineCanvasRect = getCanvasRect();
-		const svg0 = getCanvasSvg();
-		baselineCanvasScale = svg0 && typeof svg0.getScreenCTM === "function"
-			? getCtmUniformScale(svg0.getScreenCTM())
-			: (baselineCanvasRect?.width || 1);
 		const soql = `SELECT Id, NoteText__c, PosTop__c, PosLeft__c, CanvasUrl__c FROM FlowNote__c WHERE FlowId__c = '${escapeSoqlLiteral(flowId)}' ORDER BY CreatedDate ASC`;
 		const res = await chrome.runtime.sendMessage({
 			type: "proxy",
@@ -711,30 +704,9 @@ function getCanvasRect() {
 }
 
 // Reposition displayed notes to stay anchored to the canvas rect
-let lastCanvasRectKey = "";
 function layoutDisplayedNotes() {
 	const rect = getCanvasRect();
 	const svg = getCanvasSvg();
-	if (!baselineCanvasRect) baselineCanvasRect = rect;
-	let scale = 1;
-	if (svg && typeof svg.getScreenCTM === "function") {
-		try {
-			const m = svg.getScreenCTM();
-			const current = getCtmUniformScale(m);
-			const base = baselineCanvasScale || current || 1;
-			scale = (current || 1) / (base || 1);
-		} catch {
-			// fallback to rect ratio
-			scale = (rect.width && baselineCanvasRect.width) ? (rect.width / baselineCanvasRect.width) : 1;
-		}
-	} else {
-		scale = (rect.width && baselineCanvasRect.width) ? (rect.width / baselineCanvasRect.width) : 1;
-	}
-	// Clamp only upper bound
-	scale = Math.min(MAX_SCALE, scale || 1);
-	const scaleX = scale, scaleY = scale;
-	const key = `${Math.round(rect.top)}|${Math.round(rect.left)}|${Math.round(rect.width)}|${Math.round(rect.height)}`;
-	lastCanvasRectKey = key;
 	const doc = getTargetDocument();
 	const nodes = doc.querySelectorAll(`.${DISPLAY_NOTE_CLASS}`);
 	for (const el of nodes) {
@@ -742,11 +714,12 @@ function layoutDisplayedNotes() {
 		if (el.dataset.dragging === "1") continue;
 		const savedTop = Number(el.dataset.canvasTop || 0);
 		const savedLeft = Number(el.dataset.canvasLeft || 0);
-		let anchorTop = rect.top + (savedTop * scaleY);
-		let anchorLeft = rect.left + (savedLeft * scaleX);
+		let anchorTop = rect.top + savedTop;
+		let anchorLeft = rect.left + savedLeft;
+		let m = null;
 		if (svg && typeof svg.getScreenCTM === "function") {
 			try {
-				const m = svg.getScreenCTM();
+				m = svg.getScreenCTM();
 				const pt = new DOMPoint(savedLeft, savedTop);
 				const sp = pt.matrixTransform(m);
 				anchorLeft = sp.x;
@@ -765,20 +738,26 @@ function layoutDisplayedNotes() {
 			continue;
 		}
 		el.style.display = "";
-		el.style.transformOrigin = "top left";
-		el.style.transform = `scale(${scaleX}, ${scaleY})`;
-		el.style.top = `${Math.round(anchorTop)}px`;
-		el.style.left = `${Math.round(anchorLeft)}px`;
+		// Use CTM matrix to scale and position without double-applying transforms
+		if (m) {
+			// CSS matrix(a,b,c,d,e,f) corresponds to [ [a c e], [b d f], [0 0 1] ]
+			const tx = anchorLeft;
+			const ty = anchorTop;
+			el.style.transformOrigin = "0 0";
+			el.style.transform = `matrix(${m.a}, ${m.b}, ${m.c}, ${m.d}, ${Math.round(tx)}, ${Math.round(ty)})`;
+			// Clear top/left to avoid interference
+			el.style.top = "";
+			el.style.left = "";
+		} else {
+			// Fallback: position without scaling
+			el.style.transform = "";
+			el.style.top = `${Math.round(anchorTop)}px`;
+			el.style.left = `${Math.round(anchorLeft)}px`;
+		}
 	}
 }
 
-function getCtmUniformScale(m) {
-	// Uniform scale from CTM; assumes negligible rotation/skew in Flow canvas
-	const sx = Math.hypot(m.a, m.b) || 1;
-	const sy = Math.hypot(m.c, m.d) || 1;
-	// Use min to keep element aspect consistent with canvas behavior
-	return Math.min(sx, sy);
-}
+// end
 // Initialize in all frames (Flow Builder may render within an inner frame)
 ensureToolbarMounted();
 // Re-check shortly after initial load in case Lightning router updated late
