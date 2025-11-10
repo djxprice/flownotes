@@ -389,26 +389,36 @@ function parseFlowIdFromUrl(href) {
 }
 
 async function createFlowNote(fields) {
+	// Describe object to filter to valid creatable fields (handles orgs missing fields)
+	const allowed = await getCreatableFieldSet("FlowNote__c");
+	const filtered = {};
+	for (const [k, v] of Object.entries(fields || {})) {
+		if (allowed.has(k)) filtered[k] = v;
+	}
 	// Route via background proxy to call the org instance with SID Authorization
 	const res = await chrome.runtime.sendMessage({
 		type: "proxy",
 		path: "/services/data/v60.0/sobjects/FlowNote__c",
 		method: "POST",
-		body: fields
+		body: filtered
 	});
 	if (!res?.ok) {
 		const detail = (res?.body || res?.error || "").toString();
-		// Fallback: if NoteText__c isn't recognized, retry without it
-		if (detail.includes("INVALID_FIELD") && detail.includes("NoteText__c")) {
-			const { NoteText__c, ...withoutText } = fields || {};
+		// Fallback: remove any field names referenced in INVALID_FIELD errors and retry once
+		const missing = extractMissingFieldNames(detail);
+		if (missing.length > 0) {
+			const withoutMissing = {};
+			for (const [k, v] of Object.entries(filtered)) {
+				if (!missing.includes(k)) withoutMissing[k] = v;
+			}
 			const retry = await chrome.runtime.sendMessage({
 				type: "proxy",
 				path: "/services/data/v60.0/sobjects/FlowNote__c",
 				method: "POST",
-				body: withoutText
+				body: withoutMissing
 			});
 			if (retry?.ok) {
-				console.warn("[FlowNotes] Saved without NoteText__c (field missing in org).");
+				console.warn("[FlowNotes] Saved after removing missing fields:", missing.join(", "));
 				try { return JSON.parse(retry.body || "{}"); } catch { return { ok: true }; }
 			}
 		}
@@ -419,6 +429,49 @@ async function createFlowNote(fields) {
 	} catch {
 		return { ok: true };
 	}
+}
+
+function extractMissingFieldNames(detail) {
+	const out = [];
+	try {
+		const arr = JSON.parse(detail);
+		if (Array.isArray(arr)) {
+			for (const e of arr) {
+				const m = String(e?.message || "");
+				const match = m.match(/No such column '([^']+)'/);
+				if (match && match[1]) out.push(match[1]);
+			}
+		}
+	} catch {
+		// not JSON; ignore
+	}
+	return out;
+}
+
+const describeCache = new Map();
+async function getCreatableFieldSet(sobject) {
+	if (describeCache.has(sobject)) return describeCache.get(sobject);
+	const res = await chrome.runtime.sendMessage({
+		type: "proxy",
+		path: `/services/data/v60.0/sobjects/${encodeURIComponent(sobject)}/describe`,
+		method: "GET"
+	});
+	const set = new Set();
+	if (res?.ok) {
+		try {
+			const desc = JSON.parse(res.body || "{}");
+			const fields = Array.isArray(desc?.fields) ? desc.fields : [];
+			for (const f of fields) {
+				if (f?.createable) set.add(f.name);
+			}
+		} catch {
+			// ignore
+		}
+	}
+	// Always allow FlowId__c in case describe failed but it's standard in our package
+	set.add("FlowId__c");
+	describeCache.set(sobject, set);
+	return set;
 }
 
 // Initialize in all frames (Flow Builder may render within an inner frame)
