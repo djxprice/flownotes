@@ -32,6 +32,13 @@ Notes:
 
 ---
 
+### Flow canvas toolbar
+- When you open the Flow Builder canvas (URL contains `flowBuilder.app`), FlowNotes injects a small draggable toolbar on the page.
+- The toolbar shows a “Note+” button (future: open a note panel). You can drag it anywhere; its position is remembered per domain. It defaults near the top-left of the canvas.
+- If you navigate away from Flow Builder, the toolbar removes itself automatically.
+
+---
+
 
 ### 2) Configure the Extension
 No Salesforce configuration is required. Ensure the extension has:

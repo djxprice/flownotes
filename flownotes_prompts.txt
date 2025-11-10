@@ -52,6 +52,23 @@ Prompts to recreate the FlowNotes Chrome extension project from scratch:
 - Open a Salesforce tab and sign in → open popup → “Check Salesforce Session”
 - If “No session cookie”: verify Chrome cookie settings and enterprise policies
 
+10) Flow canvas toolbar
+- In `src/content.js`, detect Flow Builder pages (URL contains 'flowBuilder.app')
+- Inject a draggable toolbar (with inline styles for CSP safety) with a “Note+” button
+- Persist toolbar position in localStorage and remove it when leaving Flow Builder
+- Default position: near top-left; user can reposition and it will be remembered
+
+10) Initialize version control (Git)
+- Open terminal in project root
+- If needed on Windows: install Git → winget install --id Git.Git -e --silent --accept-package-agreements --accept-source-agreements
+- Initialize repo and commit:
+  - git init
+  - git add -A
+  - git commit -m "Initial commit: FlowNotes Chrome extension (session piggyback)"
+  - git branch -M main
+- Optionally add a remote and push:
+  - git remote add origin <your-remote-url>
+  - git push -u origin main
 
 
 
