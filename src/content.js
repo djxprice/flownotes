@@ -392,10 +392,12 @@ function openNotePopover() {
 				return;
 			}
 			const rect = pop.getBoundingClientRect();
-			// Measure relative to Flow canvas bounding rect (viewport relative) for scroll-proof positioning
+			// Convert top-window coords to SVG canvas-local coords for zoom/pan invariance
+			const svg = getCanvasSvg();
+			const local = svg ? topToSvgCoords(svg, rect.left, rect.top) : null;
 			const canvasRect = getCanvasRect();
-			const relTop = Math.round(rect.top - canvasRect.top);
-			const relLeft = Math.round(rect.left - canvasRect.left);
+			const relLeft = Math.round(local ? local.x : (rect.left - canvasRect.left));
+			const relTop = Math.round(local ? local.y : (rect.top - canvasRect.top));
 			const payload = {
 				FlowId__c: flowId,
 				NoteText__c: noteText,
@@ -760,20 +762,15 @@ function layoutDisplayedNotes() {
 		if (el.dataset.dragging === "1") continue;
 		const savedTop = Number(el.dataset.canvasTop || 0);
 		const savedLeft = Number(el.dataset.canvasLeft || 0);
+		// Map SVG local -> top window coords when possible
 		let anchorTop = rect.top + savedTop;
 		let anchorLeft = rect.left + savedLeft;
-		let m = null;
-		if (svg && typeof svg.getScreenCTM === "function") {
-			try {
-				m = svg.getScreenCTM();
-				const pt = new DOMPoint(savedLeft, savedTop);
-				const sp = pt.matrixTransform(m);
-				anchorLeft = sp.x;
-				anchorTop = sp.y;
-			} catch {}
+		if (svg) {
+			const pt = svgToTopCoords(svg, savedLeft, savedTop);
+			if (pt) { anchorLeft = pt.x; anchorTop = pt.y; }
 		}
 		// When CTM is available, prefer matrix placement for accuracy
-		// Position without scaling for maximum stability; always show within viewport bounds
+		// Position without scaling for stability; clamp into viewport for visibility
 		const margin = 10;
 		const vw = (window.innerWidth || 1200);
 		const vh = (window.innerHeight || 800);
