@@ -397,7 +397,22 @@ async function createFlowNote(fields) {
 		body: fields
 	});
 	if (!res?.ok) {
-		throw new Error(`HTTP ${res?.status || ""} ${res?.body || res?.error || ""}`.trim());
+		const detail = (res?.body || res?.error || "").toString();
+		// Fallback: if NoteText__c isn't recognized, retry without it
+		if (detail.includes("INVALID_FIELD") && detail.includes("NoteText__c")) {
+			const { NoteText__c, ...withoutText } = fields || {};
+			const retry = await chrome.runtime.sendMessage({
+				type: "proxy",
+				path: "/services/data/v60.0/sobjects/FlowNote__c",
+				method: "POST",
+				body: withoutText
+			});
+			if (retry?.ok) {
+				console.warn("[FlowNotes] Saved without NoteText__c (field missing in org).");
+				try { return JSON.parse(retry.body || "{}"); } catch { return { ok: true }; }
+			}
+		}
+		throw new Error(`HTTP ${res?.status || ""} ${detail}`.trim());
 	}
 	try {
 		return JSON.parse(res.body || "{}");
