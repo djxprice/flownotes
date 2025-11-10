@@ -37,6 +37,19 @@ npm run generate:icons
 - A draggable “FlowNotes” toolbar with “Note+” appears (top‑left by default)
 - Drag it to reposition; position persists per domain
 
+Giving the assistant full context (when you resume)
+- Share the repo URL: https://github.com/djxprice/flownotes.git
+- Share your active Flow canvas URL (the `flowBuilder.app?...flowId=...` you’re working on)
+- Mention any changes since the last commit and the next action you want (e.g., “tune scaling bounds”)
+- If there’s an error, paste the exact console line(s) from the Flow page
+
+Where context lives in the repo
+- `README.md` — how FlowNotes works (session piggyback), toolbar, notes, display
+- `RESTART_GUIDE.md` — this quick resume guide
+- `flownotes_prompts.txt` — ordered rebuild prompts
+- `SALESFORCE_METADATA_DEPLOY.md` — how to deploy `FlowNote__c`
+- `NEXT_STEPS.md` — quick checklist and suggested next tasks
+
 Troubleshooting
 - If session not detected: refresh the Salesforce tab and click “Check Salesforce Session” again
 - If the toolbar doesn’t appear on canvas:
