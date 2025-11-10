@@ -203,12 +203,24 @@ function makeDraggable(moveEl) {
 		// If this is a displayed note, update its canvas-relative dataset so it stays anchored
 		if (moveEl.classList.contains(DISPLAY_NOTE_CLASS)) {
 			const rect = moveEl.getBoundingClientRect();
-			const canvasRect = getCanvasRect();
-			// Invert scaling if applied
-			const scaleX = (baselineCanvasRect && canvasRect.width) ? (canvasRect.width / (baselineCanvasRect.width || canvasRect.width)) : 1;
-			const scaleY = (baselineCanvasRect && canvasRect.height) ? (canvasRect.height / (baselineCanvasRect.height || canvasRect.height)) : 1;
-			moveEl.dataset.canvasTop = String(Math.round((rect.top - canvasRect.top) / (scaleY || 1)));
-			moveEl.dataset.canvasLeft = String(Math.round((rect.left - canvasRect.left) / (scaleX || 1)));
+			const svg = getCanvasSvg();
+			if (svg && typeof svg.getScreenCTM === "function") {
+				try {
+					const inv = svg.getScreenCTM().inverse();
+					const pt = new DOMPoint(rect.left, rect.top);
+					const local = pt.matrixTransform(inv);
+					moveEl.dataset.canvasTop = String(Math.round(local.y));
+					moveEl.dataset.canvasLeft = String(Math.round(local.x));
+				} catch {
+					const canvasRect = getCanvasRect();
+					moveEl.dataset.canvasTop = String(Math.round(rect.top - canvasRect.top));
+					moveEl.dataset.canvasLeft = String(Math.round(rect.left - canvasRect.left));
+				}
+			} else {
+				const canvasRect = getCanvasRect();
+				moveEl.dataset.canvasTop = String(Math.round(rect.top - canvasRect.top));
+				moveEl.dataset.canvasLeft = String(Math.round(rect.left - canvasRect.left));
+			}
 		}
 	}
 	moveEl.addEventListener("mousedown", onMouseDown);
@@ -653,6 +665,23 @@ function escapeSoqlLiteral(value) {
 	return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
+function getCanvasSvg() {
+	const doc = getTargetDocument();
+	const svgs = Array.from(doc.querySelectorAll("svg"));
+	if (svgs.length === 0) return null;
+	let best = null;
+	let bestArea = 0;
+	for (const svg of svgs) {
+		const r = svg.getBoundingClientRect();
+		const area = Math.max(0, r.width) * Math.max(0, r.height);
+		if (area > bestArea) {
+			bestArea = area;
+			best = svg;
+		}
+	}
+	return best || svgs[0];
+}
+
 function getCanvasRect() {
 	const doc = getTargetDocument();
 	const svgs = Array.from(doc.querySelectorAll("svg"));
@@ -680,10 +709,23 @@ function getCanvasRect() {
 let lastCanvasRectKey = "";
 function layoutDisplayedNotes() {
 	const rect = getCanvasRect();
+	const svg = getCanvasSvg();
 	if (!baselineCanvasRect) baselineCanvasRect = rect;
-	let scaleX = rect.width && baselineCanvasRect.width ? rect.width / baselineCanvasRect.width : 1;
-	let scaleY = rect.height && baselineCanvasRect.height ? rect.height / baselineCanvasRect.height : 1;
-	// Use uniform scaling; only clamp upper bound to avoid oversized growth, preserve very small scales
+	let scaleX = 1, scaleY = 1;
+	if (svg && typeof svg.getScreenCTM === "function") {
+		try {
+			const m = svg.getScreenCTM();
+			scaleX = Math.hypot(m.a, m.b) || 1;
+			scaleY = Math.hypot(m.c, m.d) || 1;
+		} catch {
+			scaleX = rect.width && baselineCanvasRect.width ? rect.width / baselineCanvasRect.width : 1;
+			scaleY = rect.height && baselineCanvasRect.height ? rect.height / baselineCanvasRect.height : 1;
+		}
+	} else {
+		scaleX = rect.width && baselineCanvasRect.width ? rect.width / baselineCanvasRect.width : 1;
+		scaleY = rect.height && baselineCanvasRect.height ? rect.height / baselineCanvasRect.height : 1;
+	}
+	// Use uniform scaling; only clamp upper bound
 	let scale = Math.min(MAX_SCALE, Math.min(scaleX, scaleY) || 1);
 	scaleX = scaleY = scale;
 	const key = `${Math.round(rect.top)}|${Math.round(rect.left)}|${Math.round(rect.width)}|${Math.round(rect.height)}`;
@@ -695,8 +737,17 @@ function layoutDisplayedNotes() {
 		if (el.dataset.dragging === "1") continue;
 		const savedTop = Number(el.dataset.canvasTop || 0);
 		const savedLeft = Number(el.dataset.canvasLeft || 0);
-		const anchorTop = rect.top + (savedTop * scaleY);
-		const anchorLeft = rect.left + (savedLeft * scaleX);
+		let anchorTop = rect.top + (savedTop * scaleY);
+		let anchorLeft = rect.left + (savedLeft * scaleX);
+		if (svg && typeof svg.getScreenCTM === "function") {
+			try {
+				const m = svg.getScreenCTM();
+				const pt = new DOMPoint(savedLeft, savedTop);
+				const sp = pt.matrixTransform(m);
+				anchorLeft = sp.x;
+				anchorTop = sp.y;
+			} catch {}
+		}
 		// Allow a small margin to reduce flicker at screen edges
 		const margin = 10;
 		const inView =
