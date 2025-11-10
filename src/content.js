@@ -792,17 +792,23 @@ function layoutDisplayedNotes() {
 				}
 			}
 		}
-		// When CTM is available, prefer matrix placement for accuracy
-		// Position without scaling for stability; clamp into viewport for visibility
-		const margin = 10;
+		// Visibility check without altering the anchor position
+		const margin = 2;
 		const vw = (window.innerWidth || 1200);
 		const vh = (window.innerHeight || 800);
-		const clampedTop = Math.min(Math.max(anchorTop, -margin), vh + margin);
-		const clampedLeft = Math.min(Math.max(anchorLeft, -margin), vw + margin);
+		const inView =
+			anchorTop >= -margin &&
+			anchorLeft >= -margin &&
+			anchorTop <= vh + margin &&
+			anchorLeft <= vw + margin;
+		if (!inView) {
+			el.style.display = "none";
+			continue;
+		}
 		el.style.display = "";
 		el.style.transform = "";
-		el.style.top = `${Math.round(clampedTop)}px`;
-		el.style.left = `${Math.round(clampedLeft)}px`;
+		el.style.top = `${Math.round(anchorTop)}px`;
+		el.style.left = `${Math.round(anchorLeft)}px`;
 	}
 }
 
