@@ -393,8 +393,8 @@ function openNotePopover() {
 			}
 			const rect = pop.getBoundingClientRect();
 			// Convert top-window coords to SVG canvas-local coords for zoom/pan invariance
-			const svg = getCanvasSvg();
-			const local = svg ? topToSvgCoords(svg, rect.left, rect.top) : null;
+			const node = getCanvasTransformNode() || getCanvasSvg();
+			const local = node ? topToSvgCoords(node, rect.left, rect.top) : null;
 			const canvasRect = getCanvasRect();
 			const relLeft = Math.round(local ? local.x : (rect.left - canvasRect.left));
 			const relTop = Math.round(local ? local.y : (rect.top - canvasRect.top));
@@ -702,6 +702,28 @@ function getCanvasSvg() {
 	return best || all[0];
 }
 
+function getCanvasTransformNode() {
+	const svg = getCanvasSvg();
+	if (!svg) return null;
+	try {
+		// Prefer the largest <g> within the SVG as the transform root (Flow canvas content)
+		const gs = Array.from(svg.querySelectorAll("g"));
+		if (gs.length === 0) return svg;
+		let best = svg;
+		let bestArea = 0;
+		for (const g of gs) {
+			try {
+				const r = g.getBoundingClientRect();
+				const area = Math.max(0, r.width) * Math.max(0, r.height);
+				if (area > bestArea) { bestArea = area; best = g; }
+			} catch {}
+		}
+		return best || svg;
+	} catch {
+		return svg;
+	}
+}
+
 function getWindowOffsetToTop(win) {
 	let dx = 0, dy = 0;
 	try {
@@ -718,23 +740,23 @@ function getWindowOffsetToTop(win) {
 	return { dx, dy };
 }
 
-function svgToTopCoords(svg, x, y) {
+function svgToTopCoords(node, x, y) {
 	try {
-		const m = svg.getScreenCTM();
+		const m = node.getScreenCTM();
 		if (!m) return null;
 		const pt = new DOMPoint(x, y).matrixTransform(m);
-		const off = getWindowOffsetToTop(svg.ownerDocument.defaultView || window);
+		const off = getWindowOffsetToTop(node.ownerDocument.defaultView || window);
 		return { x: pt.x + off.dx, y: pt.y + off.dy };
 	} catch {
 		return null;
 	}
 }
 
-function topToSvgCoords(svg, x, y) {
+function topToSvgCoords(node, x, y) {
 	try {
-		const off = getWindowOffsetToTop(svg.ownerDocument.defaultView || window);
+		const off = getWindowOffsetToTop(node.ownerDocument.defaultView || window);
 		const localScreen = new DOMPoint(x - off.dx, y - off.dy);
-		const inv = svg.getScreenCTM() && svg.getScreenCTM().inverse ? svg.getScreenCTM().inverse() : null;
+		const inv = node.getScreenCTM() && node.getScreenCTM().inverse ? node.getScreenCTM().inverse() : null;
 		if (!inv) return null;
 		const local = localScreen.matrixTransform(inv);
 		return { x: local.x, y: local.y };
@@ -756,10 +778,25 @@ function getCanvasRect() {
 	return { top: r.top + off.dy, left: r.left + off.dx, width: r.width, height: r.height };
 }
 
+function getCanvasScale() {
+	try {
+		const node = getCanvasTransformNode() || getCanvasSvg();
+		if (node && typeof node.getScreenCTM === "function") {
+			const m = node.getScreenCTM();
+			const sx = Math.hypot(m.a, m.b) || 1;
+			const sy = Math.hypot(m.c, m.d) || 1;
+			return Math.min(sx, sy) || 1;
+		}
+	} catch {}
+	// Fallback proportional to size
+	const r = getCanvasRect();
+	return Math.max(1, Math.min(r.width, r.height)) || 1;
+}
+
 // Reposition displayed notes to stay anchored to the canvas rect
 function layoutDisplayedNotes() {
 	const rect = getCanvasRect();
-	const svg = getCanvasSvg();
+	const node = getCanvasTransformNode() || getCanvasSvg();
 	const doc = getTargetDocument();
 	const nodes = doc.querySelectorAll(`.${DISPLAY_NOTE_CLASS}`);
 	for (const el of nodes) {
@@ -770,8 +807,8 @@ function layoutDisplayedNotes() {
 		// Map SVG local -> top window coords when possible
 		let anchorTop = rect.top + savedTop;
 		let anchorLeft = rect.left + savedLeft;
-		if (svg) {
-			const pt = svgToTopCoords(svg, savedLeft, savedTop);
+		if (node) {
+			const pt = svgToTopCoords(node, savedLeft, savedTop);
 			if (pt) { anchorLeft = pt.x; anchorTop = pt.y; }
 			else {
 				// Fallback with scale factor if CTM mapping failed
