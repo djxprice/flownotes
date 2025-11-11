@@ -1042,6 +1042,15 @@ function layoutDisplayedNotes() {
 				}
 			}
 		}
+		// If mapping failed, keep last known on-screen position to avoid vanishing
+		if (anchorTop == null || anchorLeft == null) {
+			const prevTop = parseFloat(el.style.top);
+			const prevLeft = parseFloat(el.style.left);
+			if (Number.isFinite(prevTop) && Number.isFinite(prevLeft)) {
+				anchorTop = prevTop;
+				anchorLeft = prevLeft;
+			}
+		}
 		// If four-corner anchors exist, recompute width/height unless we've locked size to creation
 		if (hasCorners && el.dataset.sizeLocked !== "1") {
 			const tl = { x: savedLeft, y: savedTop };
@@ -1164,19 +1173,16 @@ function layoutDisplayedNotes() {
 			}
 		}
 
-		// Visibility check without altering the anchor position
+		// Visibility: do not hide during pan/zoom; keep last known position
 		const margin = 2;
 		const vw = (window.innerWidth || 1200);
 		const vh = (window.innerHeight || 800);
 		const inView =
-			anchorTop >= -margin &&
-			anchorLeft >= -margin &&
-			anchorTop <= vh + margin &&
-			anchorLeft <= vw + margin;
-		if (!inView) {
-			el.style.display = "none";
-			continue;
-		}
+			anchorTop != null && anchorLeft != null &&
+			anchorTop >= -margin && anchorLeft >= -margin &&
+			anchorTop <= vh + margin && anchorLeft <= vw + margin;
+		// Always keep visible; skip only if we have no position
+		if (anchorTop == null || anchorLeft == null) continue;
 		el.style.display = "";
 		// Apply uniform per-axis scale relative to saved baseline
 		try {
