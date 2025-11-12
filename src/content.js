@@ -1237,8 +1237,8 @@ async function updateNote(noteId, noteText, popout) {
 		
 		console.log("[FlowNotes] Note updated successfully");
 		
-		// Close popout (rectangle persists for saved notes)
-		popout.remove();
+		// Close popout and remove associated rectangle
+		removeNoteAndRectangle(popout);
 		
 		// Show success message
 		showToast("Note updated successfully!");
