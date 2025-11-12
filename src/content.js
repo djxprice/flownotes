@@ -656,6 +656,41 @@ function openNotePopout() {
 	// Add to page
 	document.body.appendChild(popout);
 	
+	// Convert initial position to SVG coordinates so it can follow canvas
+	const svg = getFlowCanvasSVG();
+	if (svg) {
+		const rect = popout.getBoundingClientRect();
+		
+		// Convert all four corners to SVG coordinates
+		const topLeft = screenToSVG(svg, rect.left, rect.top);
+		const topRight = screenToSVG(svg, rect.right, rect.top);
+		const bottomLeft = screenToSVG(svg, rect.left, rect.bottom);
+		const bottomRight = screenToSVG(svg, rect.right, rect.bottom);
+		
+		if (topLeft && topRight && bottomLeft && bottomRight) {
+			// Store SVG coordinates in dataset
+			popout.dataset.tlx = topLeft.x;
+			popout.dataset.tly = topLeft.y;
+			popout.dataset.trx = topRight.x;
+			popout.dataset.try = topRight.y;
+			popout.dataset.blx = bottomLeft.x;
+			popout.dataset.bly = bottomLeft.y;
+			popout.dataset.brx = bottomRight.x;
+			popout.dataset.bry = bottomRight.y;
+			
+			// Mark it as a note that should be updated
+			popout.className = DISPLAYED_NOTE_CLASS;
+			
+			// Store base dimensions
+			popout.dataset.baseHeight = rect.height;
+			
+			// Add transform origin
+			popout.style.transformOrigin = "top left";
+			
+			console.log("[FlowNotes] New note positioned with SVG coordinates");
+		}
+	}
+	
 	// Focus textarea
 	setTimeout(() => textarea.focus(), 0);
 	
