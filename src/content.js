@@ -578,14 +578,45 @@ function openNotePopout() {
 	});
 	textarea.addEventListener("mousedown", (e) => e.stopPropagation());
 	
-	// Footer (Save & Close button)
+	// Footer (Draw button and Save & Close button)
 	const footer = document.createElement("div");
 	Object.assign(footer.style, {
 		display: "flex",
-		justifyContent: "flex-end",
-		marginTop: "8px"
+		justifyContent: "space-between",
+		alignItems: "center",
+		marginTop: "8px",
+		gap: "8px"
 	});
 	
+	// Draw button
+	const drawButton = document.createElement("button");
+	drawButton.textContent = "📐 Draw";
+	drawButton.title = "Draw a rectangle on the canvas to highlight elements";
+	Object.assign(drawButton.style, {
+		all: "unset",
+		padding: "6px 12px",
+		fontSize: "12px",
+		fontWeight: "600",
+		background: "rgba(255, 255, 255, 0.1)",
+		color: "#e6ecf1",
+		border: "1px solid rgba(255, 255, 255, 0.2)",
+		borderRadius: "8px",
+		cursor: "pointer",
+		transition: "background 0.2s"
+	});
+	
+	drawButton.addEventListener("mouseenter", () => {
+		drawButton.style.background = "rgba(255, 255, 255, 0.15)";
+	});
+	drawButton.addEventListener("mouseleave", () => {
+		drawButton.style.background = "rgba(255, 255, 255, 0.1)";
+	});
+	drawButton.addEventListener("mousedown", (e) => e.stopPropagation());
+	drawButton.addEventListener("click", () => {
+		startDrawingMode(popout);
+	});
+	
+	// Save button
 	const saveButton = document.createElement("button");
 	saveButton.textContent = "Save & Close";
 	Object.assign(saveButton.style, {
@@ -611,6 +642,7 @@ function openNotePopout() {
 		saveNote(textarea.value, popout);
 	});
 	
+	footer.appendChild(drawButton);
 	footer.appendChild(saveButton);
 	
 	// Assemble popout
@@ -1321,6 +1353,21 @@ function startDisplayedNotesUpdateLoop() {
  */
 function escapeSOQL(value) {
 	return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+// ===================================================================
+// Canvas Drawing Feature
+// ===================================================================
+
+/**
+ * Start drawing mode - user can draw a rectangle on canvas
+ */
+function startDrawingMode(notePopout) {
+	console.log("[FlowNotes] Starting drawing mode...");
+	showToast("Click on the canvas to set the first corner of your rectangle");
+	
+	// TODO: Implement drawing logic
+	// For now, just log to test the button works
 }
 
 /**
