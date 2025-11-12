@@ -521,4 +521,144 @@ Back to stable version with:
 
 ---
 
-**End of Development History — MVP Complete! 🎉**
+## Session 15: Draw Rectangle Feature (November 12, 2025) - IN PROGRESS
+
+**Goal:** Add ability to draw rectangles on canvas to highlight collections of Flow elements that a note addresses
+
+### Prompts
+
+102. "Add a 'Draw' button to the note. When the button is clicked, the user can use the mouse to draw a square wire frame on the canvas to indicate a collection of elements are addressed by the note. The first mouse left click sets the corner of the square, the shape is decided by the mouse cursor movement, and the second click sets the opposite corner of the square."
+103. "proceed" (after Step 1 - Draw button added)
+104. "The crosshair cursor did not appear, but the rectangle drawing worked, but the rectangle did not display after the second click, nor did it persist."
+105. "that all works, but, before proceeding with step 5, please make it so the unsaved note has similar behavior to saved notes and the rectangle--it should scale with zoom and follow the canvas."
+106. "update all docs and push to repos to make this a restore point, commit comment = 'draw rectangle, not saved'"
+
+### Implementation Steps
+
+**Step 1: Add Draw Button ✅**
+- Added 📐 Draw button to note popout footer
+- Positioned next to Save & Close button
+- Added tooltip and styling
+- Created `startDrawingMode()` stub function
+
+**Step 2-4: Implement Drawing Interaction ✅**
+- First click sets starting corner
+- Mouse move shows dashed teal preview rectangle
+- Second click finalizes rectangle
+- Escape key cancels drawing at any time
+- Converts screen coordinates to SVG coordinates
+- Stores 4 corner coordinates in note's dataset
+- Event handlers use capture phase for reliable canvas interaction
+
+**Step 5: Fix Cursor and Persistence ✅**
+- Added global `<style>` element with `* { cursor: crosshair !important; }`
+- Created `createPermanentRectangle()` function
+- Rectangle appears with solid teal border after drawing
+- Added `updateRectanglePosition()` function
+- Integrated rectangle updates into continuous update loop
+- Rectangles now follow canvas pan and zoom
+
+**Step 6: Make Unsaved Notes Follow Canvas ✅**
+- Convert new note initial position to SVG coordinates
+- Add `DISPLAYED_NOTE_CLASS` to new notes
+- New notes participate in continuous update loop
+- Unsaved notes scale with zoom and follow pan
+- Drawn rectangles follow with their notes
+
+### Features Implemented
+
+**Drawing Workflow:**
+1. User clicks "📐 Draw" button on any note
+2. Cursor changes to crosshair
+3. First click on canvas sets starting corner
+4. Dashed preview rectangle follows mouse
+5. Second click finalizes rectangle
+6. Solid teal rectangle appears on canvas
+7. Rectangle follows canvas pan/zoom continuously
+
+**Visual Design:**
+- Preview: Dashed teal border (#5bc0be), semi-transparent background
+- Final: Solid teal border, very light background
+- Below notes (z-index: 2147483644) but above canvas
+
+**Technical Implementation:**
+- Screen coordinates → SVG coordinates conversion
+- 4 corners stored (TLX, TLY, TRX, TRY, BLX, BLY, BRX, BRY)
+- Continuous `requestAnimationFrame` updates
+- Canvas-relative positioning maintained
+- Works with both saved and unsaved notes
+
+### Current State
+
+**What Works:**
+- ✅ Draw button in note UI
+- ✅ Interactive drawing with live preview
+- ✅ Rectangle persistence on screen
+- ✅ Rectangle follows canvas pan/zoom
+- ✅ Multiple rectangles (one per note)
+- ✅ Unsaved notes follow canvas
+- ✅ Escape to cancel drawing
+- ✅ Crosshair cursor during drawing
+
+**Not Yet Implemented:**
+- ❌ Rectangle coordinates not saved to Salesforce
+- ❌ Rectangles don't persist after page reload
+- ❌ Can't edit/delete rectangles independently
+- ❌ Rectangle not associated with saved note in DB
+
+**Next Steps:**
+1. Add rectangle fields to `FlowNote__c` metadata
+2. Include rectangle coordinates in save payload
+3. Query and display saved rectangles
+4. Update rectangle on note update
+5. Delete rectangle when note deleted
+
+### Commits in This Session
+
+- `7ecd38f` - Step 1: Add Draw button to note popout UI
+- `c6cbcbf` - Steps 2-4: Implement drawing mode with live preview
+- `e3032d8` - Fix: Make rectangle persist and improve cursor
+- `1921eba` - Fix: Make unsaved notes follow canvas like saved notes
+
+### Technical Details
+
+**Drawing State Management:**
+```javascript
+drawingState = {
+  notePopout: element,
+  startX: number,
+  startY: number,
+  previewRect: HTMLElement
+}
+```
+
+**Rectangle Coordinate Storage:**
+- Stored in note element's `dataset.rectTLX`, `dataset.rectTLY`, etc.
+- SVG-local coordinates for canvas-relative positioning
+- Converted to/from screen coordinates every frame
+
+**Update Loop Integration:**
+- Rectangles updated after note positions in same loop
+- Uses same `svgToScreen()` conversion logic
+- Maintains synchronization between notes and rectangles
+
+### Lessons Learned
+
+1. **Cursor override requires !important** - Canvas styles override normal cursor
+2. **Create permanent element immediately** - Don't rely on preview element
+3. **Integrate with existing update loop** - Reuse positioning logic for consistency
+4. **New notes need canvas behavior** - All notes should behave the same way
+
+### Known Limitations
+
+- Rectangles only stored in memory (not persisted)
+- No way to edit rectangle after drawing
+- No delete button for rectangles
+- Rectangle coordinates not in Salesforce yet
+- One rectangle per note maximum (currently)
+
+**Current Status:** Drawing feature working, persistence pending
+
+---
+
+**End of Development History — Feature In Progress! 🎯**
