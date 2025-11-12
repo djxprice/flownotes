@@ -779,12 +779,29 @@ async function saveNote(noteText, popout) {
 			}
 		}
 		
+		// Get rectangle coordinates if a rectangle was drawn
+		let rectangleCoords = null;
+		if (popout.dataset.rectTLX && popout.dataset.rectTLY) {
+			rectangleCoords = {
+				RectTLX__c: Number(parseFloat(popout.dataset.rectTLX).toFixed(5)),
+				RectTLY__c: Number(parseFloat(popout.dataset.rectTLY).toFixed(5)),
+				RectTRX__c: Number(parseFloat(popout.dataset.rectTRX).toFixed(5)),
+				RectTRY__c: Number(parseFloat(popout.dataset.rectTRY).toFixed(5)),
+				RectBLX__c: Number(parseFloat(popout.dataset.rectBLX).toFixed(5)),
+				RectBLY__c: Number(parseFloat(popout.dataset.rectBLY).toFixed(5)),
+				RectBRX__c: Number(parseFloat(popout.dataset.rectBRX).toFixed(5)),
+				RectBRY__c: Number(parseFloat(popout.dataset.rectBRY).toFixed(5))
+			};
+			console.log("[FlowNotes] Rectangle coordinates included in save:", rectangleCoords);
+		}
+		
 		// Create FlowNote__c record via background script
 		const payload = {
 			FlowId__c: flowId,
 			NoteText__c: text,
 			...(cornerCoords || {}),
-			...(centerCoords || {})
+			...(centerCoords || {}),
+			...(rectangleCoords || {})
 		};
 		
 		// Store the base dimensions in chrome.storage for scaling reference
@@ -901,7 +918,7 @@ async function displayNotes() {
 		console.log("[FlowNotes] Fetching notes for flow:", flowId);
 		
 		// Build SOQL query - include all position fields
-		const soql = `SELECT Id, NoteText__c, CreatedDate, TLX__c, TLY__c, TRX__c, TRY__c, BLX__c, BLY__c, BRX__c, BRY__c, CenterX__c, CenterY__c FROM FlowNote__c WHERE FlowId__c = '${escapeSOQL(flowId)}' ORDER BY CreatedDate DESC`;
+		const soql = `SELECT Id, NoteText__c, CreatedDate, TLX__c, TLY__c, TRX__c, TRY__c, BLX__c, BLY__c, BRX__c, BRY__c, CenterX__c, CenterY__c, RectTLX__c, RectTLY__c, RectTRX__c, RectTRY__c, RectBLX__c, RectBLY__c, RectBRX__c, RectBRY__c FROM FlowNote__c WHERE FlowId__c = '${escapeSOQL(flowId)}' ORDER BY CreatedDate DESC`;
 		
 		// Query via background script
 		const response = await chrome.runtime.sendMessage({
@@ -973,6 +990,16 @@ function displayNotePopout(note, yOffset = 0) {
 	if (note.BLY__c != null) popout.dataset.bly = note.BLY__c;
 	if (note.CenterX__c != null) popout.dataset.centerX = note.CenterX__c;
 	if (note.CenterY__c != null) popout.dataset.centerY = note.CenterY__c;
+	
+	// Store rectangle coordinates if present
+	if (note.RectTLX__c != null) popout.dataset.rectTLX = note.RectTLX__c;
+	if (note.RectTLY__c != null) popout.dataset.rectTLY = note.RectTLY__c;
+	if (note.RectTRX__c != null) popout.dataset.rectTRX = note.RectTRX__c;
+	if (note.RectTRY__c != null) popout.dataset.rectTRY = note.RectTRY__c;
+	if (note.RectBLX__c != null) popout.dataset.rectBLX = note.RectBLX__c;
+	if (note.RectBLY__c != null) popout.dataset.rectBLY = note.RectBLY__c;
+	if (note.RectBRX__c != null) popout.dataset.rectBRX = note.RectBRX__c;
+	if (note.RectBRY__c != null) popout.dataset.rectBRY = note.RectBRY__c;
 	
 	Object.assign(popout.style, {
 		position: "fixed",
@@ -1140,6 +1167,12 @@ function displayNotePopout(note, yOffset = 0) {
 	
 	// Add to page
 	document.body.appendChild(popout);
+	
+	// Create rectangle if coordinates are present
+	if (note.RectTLX__c != null && note.RectTLY__c != null) {
+		createPermanentRectangle(popout);
+		console.log("[FlowNotes] Rectangle created for saved note:", note.Id);
+	}
 }
 
 /**
@@ -1164,13 +1197,30 @@ async function updateNote(noteId, noteText, popout) {
 			updateButton.style.opacity = "0.6";
 		}
 		
+		// Get rectangle coordinates if a rectangle exists
+		let rectangleCoords = {};
+		if (popout.dataset.rectTLX && popout.dataset.rectTLY) {
+			rectangleCoords = {
+				RectTLX__c: Number(parseFloat(popout.dataset.rectTLX).toFixed(5)),
+				RectTLY__c: Number(parseFloat(popout.dataset.rectTLY).toFixed(5)),
+				RectTRX__c: Number(parseFloat(popout.dataset.rectTRX).toFixed(5)),
+				RectTRY__c: Number(parseFloat(popout.dataset.rectTRY).toFixed(5)),
+				RectBLX__c: Number(parseFloat(popout.dataset.rectBLX).toFixed(5)),
+				RectBLY__c: Number(parseFloat(popout.dataset.rectBLY).toFixed(5)),
+				RectBRX__c: Number(parseFloat(popout.dataset.rectBRX).toFixed(5)),
+				RectBRY__c: Number(parseFloat(popout.dataset.rectBRY).toFixed(5))
+			};
+			console.log("[FlowNotes] Rectangle coordinates included in update:", rectangleCoords);
+		}
+		
 		// Update FlowNote__c record via background script
 		const response = await chrome.runtime.sendMessage({
 			type: "proxy",
 			path: `/services/data/v60.0/sobjects/FlowNote__c/${noteId}`,
 			method: "PATCH",
 			body: {
-				NoteText__c: text
+				NoteText__c: text,
+				...rectangleCoords
 			}
 		});
 		

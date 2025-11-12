@@ -112,6 +112,72 @@
 		<precision>18</precision>
 		<scale>5</scale>
 	</fields>
+
+	<!-- Rectangle highlight fields (SVG-local coordinates) -->
+	<!-- These store the four corners of the drawn rectangle that highlights Flow elements -->
+	<!-- Rectangle top-left corner -->
+	<fields>
+		<fullName>RectTLX__c</fullName>
+		<label>Rectangle Top Left X</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+	<fields>
+		<fullName>RectTLY__c</fullName>
+		<label>Rectangle Top Left Y</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+
+	<!-- Rectangle top-right corner -->
+	<fields>
+		<fullName>RectTRX__c</fullName>
+		<label>Rectangle Top Right X</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+	<fields>
+		<fullName>RectTRY__c</fullName>
+		<label>Rectangle Top Right Y</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+
+	<!-- Rectangle bottom-left corner -->
+	<fields>
+		<fullName>RectBLX__c</fullName>
+		<label>Rectangle Bottom Left X</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+	<fields>
+		<fullName>RectBLY__c</fullName>
+		<label>Rectangle Bottom Left Y</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+
+	<!-- Rectangle bottom-right corner -->
+	<fields>
+		<fullName>RectBRX__c</fullName>
+		<label>Rectangle Bottom Right X</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+	<fields>
+		<fullName>RectBRY__c</fullName>
+		<label>Rectangle Bottom Right Y</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
 </CustomObject>
 
 
