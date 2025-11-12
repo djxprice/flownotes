@@ -437,6 +437,16 @@ function svgToScreen(svg, svgX, svgY) {
 		const pt = new DOMPoint(svgX, svgY);
 		const transformed = pt.matrixTransform(ctm);
 		
+		// Validate the transformed coordinates are finite numbers
+		if (!isFinite(transformed.x) || !isFinite(transformed.y)) {
+			console.warn("[FlowNotes] SVG to screen conversion produced invalid coordinates:", {
+				input: { svgX, svgY },
+				output: { x: transformed.x, y: transformed.y },
+				ctm: { a: ctm.a, b: ctm.b, c: ctm.c, d: ctm.d, e: ctm.e, f: ctm.f }
+			});
+			return null;
+		}
+		
 		return { x: transformed.x, y: transformed.y };
 	} catch (e) {
 		console.warn("[FlowNotes] Failed to convert SVG to screen coords:", e);
@@ -1176,41 +1186,73 @@ function updateDisplayedNotePositions() {
 		const blx = parseFloat(note.dataset.blx);
 		const bly = parseFloat(note.dataset.bly);
 		
+		// Validate coordinates exist
+		if (isNaN(tlx) || isNaN(tly) || isNaN(trx) || isNaN(try_) || isNaN(blx) || isNaN(bly)) {
+			continue;
+		}
+		
 		// Convert SVG coordinates to current screen position
-		if (!isNaN(tlx) && !isNaN(tly) && !isNaN(trx) && !isNaN(try_) && !isNaN(blx) && !isNaN(bly)) {
-			const topLeft = svgToScreen(svg, tlx, tly);
-			const topRight = svgToScreen(svg, trx, try_);
-			const bottomLeft = svgToScreen(svg, blx, bly);
-			
-			if (topLeft && topRight && bottomLeft) {
-				// Position at top-left
-				note.style.top = `${topLeft.y}px`;
-				note.style.left = `${topLeft.x}px`;
-				
-				// Calculate width and height from corners
-				const width = Math.abs(topRight.x - topLeft.x);
-				const height = Math.abs(bottomLeft.y - topLeft.y);
-				
-				// Calculate scale factor
-				const baseWidth = 300; // Original width
-				const baseHeight = parseFloat(note.dataset.baseHeight) || 200; // Store this when creating
-				
-				const scaleX = width / baseWidth;
-				const scaleY = height / baseHeight;
-				
-				// Apply uniform scale (use minimum to maintain aspect ratio)
-				const scale = Math.min(scaleX, scaleY);
-				const clampedScale = Math.max(0.5, Math.min(2.0, scale)); // Clamp between 0.5x and 2x
-				
-				note.style.transform = `scale(${clampedScale})`;
-				
-				// Adjust visibility based on scale (hide at very small scales)
-				if (clampedScale < 0.6) {
-					note.style.opacity = "0.5";
-				} else {
-					note.style.opacity = "1";
-				}
-			}
+		const topLeft = svgToScreen(svg, tlx, tly);
+		const topRight = svgToScreen(svg, trx, try_);
+		const bottomLeft = svgToScreen(svg, blx, bly);
+		
+		// Validate conversions succeeded
+		if (!topLeft || !topRight || !bottomLeft) {
+			// Coordinate conversion failed - preserve last known position
+			console.warn("[FlowNotes] Coordinate conversion failed at current zoom level");
+			continue;
+		}
+		
+		// Validate converted coordinates are reasonable (not NaN or Infinity)
+		if (!isFinite(topLeft.x) || !isFinite(topLeft.y) || 
+		    !isFinite(topRight.x) || !isFinite(topRight.y) ||
+		    !isFinite(bottomLeft.x) || !isFinite(bottomLeft.y)) {
+			console.warn("[FlowNotes] Invalid coordinates after conversion:", { topLeft, topRight, bottomLeft });
+			continue;
+		}
+		
+		// Calculate width and height from corners
+		const width = Math.abs(topRight.x - topLeft.x);
+		const height = Math.abs(bottomLeft.y - topLeft.y);
+		
+		// Validate dimensions are reasonable
+		if (width < 1 || height < 1 || width > 10000 || height > 10000) {
+			console.warn("[FlowNotes] Invalid dimensions:", { width, height });
+			continue;
+		}
+		
+		// Store last valid position before updating
+		note.dataset.lastValidTop = topLeft.y;
+		note.dataset.lastValidLeft = topLeft.x;
+		
+		// Position at top-left
+		note.style.top = `${topLeft.y}px`;
+		note.style.left = `${topLeft.x}px`;
+		
+		// Calculate scale factor
+		const baseWidth = 300; // Original width
+		const baseHeight = parseFloat(note.dataset.baseHeight) || 200;
+		
+		const scaleX = width / baseWidth;
+		const scaleY = height / baseHeight;
+		
+		// Apply uniform scale (use minimum to maintain aspect ratio)
+		const scale = Math.min(scaleX, scaleY);
+		const clampedScale = Math.max(0.5, Math.min(2.0, scale)); // Clamp between 0.5x and 2x
+		
+		// Validate scale is reasonable
+		if (!isFinite(clampedScale) || clampedScale <= 0) {
+			console.warn("[FlowNotes] Invalid scale:", clampedScale);
+			continue;
+		}
+		
+		note.style.transform = `scale(${clampedScale})`;
+		
+		// Adjust visibility based on scale
+		if (clampedScale < 0.6) {
+			note.style.opacity = "0.5";
+		} else {
+			note.style.opacity = "1";
 		}
 	}
 }
