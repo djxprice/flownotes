@@ -1359,15 +1359,213 @@ function escapeSOQL(value) {
 // Canvas Drawing Feature
 // ===================================================================
 
+let drawingState = null; // Track drawing state: { startX, startY, previewRect, notePopout }
+
 /**
  * Start drawing mode - user can draw a rectangle on canvas
  */
 function startDrawingMode(notePopout) {
 	console.log("[FlowNotes] Starting drawing mode...");
-	showToast("Click on the canvas to set the first corner of your rectangle");
 	
-	// TODO: Implement drawing logic
-	// For now, just log to test the button works
+	// Cancel any existing drawing mode
+	if (drawingState) {
+		cancelDrawingMode();
+	}
+	
+	// Change cursor to crosshair for entire document
+	document.body.style.cursor = "crosshair";
+	
+	// Show instructions
+	showToast("Click on the canvas to set the first corner");
+	
+	// Add event listeners for drawing
+	document.addEventListener("click", handleDrawingClick, true);
+	document.addEventListener("keydown", handleDrawingEscape, true);
+	
+	// Store reference to note popout
+	drawingState = {
+		notePopout: notePopout,
+		startX: null,
+		startY: null,
+		previewRect: null
+	};
+	
+	console.log("[FlowNotes] Drawing mode active - waiting for first click");
+}
+
+/**
+ * Handle click events during drawing mode
+ */
+function handleDrawingClick(e) {
+	// Ignore clicks on the note popout itself
+	if (e.target.closest(`#${NOTE_POPOUT_ID}`) || 
+	    e.target.closest(`.${DISPLAYED_NOTE_CLASS}`)) {
+		return;
+	}
+	
+	e.preventDefault();
+	e.stopPropagation();
+	
+	if (!drawingState.startX) {
+		// First click - set start corner
+		drawingState.startX = e.clientX;
+		drawingState.startY = e.clientY;
+		
+		console.log("[FlowNotes] First corner set:", { x: drawingState.startX, y: drawingState.startY });
+		showToast("Move mouse to size the rectangle, then click again");
+		
+		// Create preview rectangle
+		createPreviewRectangle(drawingState.startX, drawingState.startY);
+		
+		// Add mousemove listener for preview
+		document.addEventListener("mousemove", handleDrawingMouseMove, true);
+		
+	} else {
+		// Second click - finalize rectangle
+		const endX = e.clientX;
+		const endY = e.clientY;
+		
+		console.log("[FlowNotes] Second corner set:", { x: endX, y: endY });
+		
+		// Finalize the rectangle
+		finalizeRectangle(drawingState.startX, drawingState.startY, endX, endY, drawingState.notePopout);
+		
+		// Clean up drawing mode
+		cancelDrawingMode();
+	}
+}
+
+/**
+ * Handle mouse move during drawing to show preview
+ */
+function handleDrawingMouseMove(e) {
+	if (!drawingState || !drawingState.previewRect) return;
+	
+	const currentX = e.clientX;
+	const currentY = e.clientY;
+	
+	// Calculate rectangle dimensions
+	const left = Math.min(drawingState.startX, currentX);
+	const top = Math.min(drawingState.startY, currentY);
+	const width = Math.abs(currentX - drawingState.startX);
+	const height = Math.abs(currentY - drawingState.startY);
+	
+	// Update preview rectangle
+	drawingState.previewRect.style.left = `${left}px`;
+	drawingState.previewRect.style.top = `${top}px`;
+	drawingState.previewRect.style.width = `${width}px`;
+	drawingState.previewRect.style.height = `${height}px`;
+}
+
+/**
+ * Handle Escape key to cancel drawing
+ */
+function handleDrawingEscape(e) {
+	if (e.key === "Escape") {
+		console.log("[FlowNotes] Drawing cancelled by user");
+		showToast("Drawing cancelled");
+		cancelDrawingMode();
+	}
+}
+
+/**
+ * Create preview rectangle element
+ */
+function createPreviewRectangle(startX, startY) {
+	const rect = document.createElement("div");
+	rect.id = "flownotes-draw-preview";
+	
+	Object.assign(rect.style, {
+		position: "fixed",
+		left: `${startX}px`,
+		top: `${startY}px`,
+		width: "0px",
+		height: "0px",
+		border: "2px dashed #5bc0be",
+		background: "rgba(91, 192, 190, 0.1)",
+		pointerEvents: "none",
+		zIndex: "2147483646"
+	});
+	
+	document.body.appendChild(rect);
+	drawingState.previewRect = rect;
+	
+	console.log("[FlowNotes] Preview rectangle created");
+}
+
+/**
+ * Finalize rectangle and store coordinates
+ */
+function finalizeRectangle(startX, startY, endX, endY, notePopout) {
+	console.log("[FlowNotes] Finalizing rectangle:", { startX, startY, endX, endY });
+	
+	// Convert screen coordinates to SVG coordinates
+	const svg = getFlowCanvasSVG();
+	if (!svg) {
+		console.warn("[FlowNotes] Could not find SVG canvas");
+		showToast("Error: Canvas not found");
+		return;
+	}
+	
+	// Calculate actual corners (normalize so we have top-left and bottom-right)
+	const left = Math.min(startX, endX);
+	const top = Math.min(startY, endY);
+	const right = Math.max(startX, endX);
+	const bottom = Math.max(startY, endY);
+	
+	// Convert to SVG coordinates
+	const topLeftSVG = screenToSVG(svg, left, top);
+	const topRightSVG = screenToSVG(svg, right, top);
+	const bottomLeftSVG = screenToSVG(svg, left, bottom);
+	const bottomRightSVG = screenToSVG(svg, right, bottom);
+	
+	if (!topLeftSVG || !topRightSVG || !bottomLeftSVG || !bottomRightSVG) {
+		console.warn("[FlowNotes] Failed to convert rectangle coordinates");
+		showToast("Error: Could not convert coordinates");
+		return;
+	}
+	
+	// Store rectangle coordinates in the note popout's dataset
+	notePopout.dataset.rectTLX = topLeftSVG.x;
+	notePopout.dataset.rectTLY = topLeftSVG.y;
+	notePopout.dataset.rectTRX = topRightSVG.x;
+	notePopout.dataset.rectTRY = topRightSVG.y;
+	notePopout.dataset.rectBLX = bottomLeftSVG.x;
+	notePopout.dataset.rectBLY = bottomLeftSVG.y;
+	notePopout.dataset.rectBRX = bottomRightSVG.x;
+	notePopout.dataset.rectBRY = bottomRightSVG.y;
+	
+	console.log("[FlowNotes] Rectangle coordinates stored in note:", {
+		topLeft: topLeftSVG,
+		topRight: topRightSVG,
+		bottomLeft: bottomLeftSVG,
+		bottomRight: bottomRightSVG
+	});
+	
+	showToast("Rectangle drawn! Save the note to persist it.");
+}
+
+/**
+ * Cancel drawing mode and clean up
+ */
+function cancelDrawingMode() {
+	// Remove event listeners
+	document.removeEventListener("click", handleDrawingClick, true);
+	document.removeEventListener("mousemove", handleDrawingMouseMove, true);
+	document.removeEventListener("keydown", handleDrawingEscape, true);
+	
+	// Remove preview rectangle if it exists
+	if (drawingState && drawingState.previewRect) {
+		drawingState.previewRect.remove();
+	}
+	
+	// Reset cursor
+	document.body.style.cursor = "";
+	
+	// Clear state
+	drawingState = null;
+	
+	console.log("[FlowNotes] Drawing mode cancelled");
 }
 
 /**
