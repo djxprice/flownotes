@@ -430,4 +430,95 @@ I want to: [your goal]
 
 ---
 
+## Session 14: Icon Marker Attempt (November 12, 2025) - ROLLED BACK
+
+**Goal:** Implement icon markers to show at extreme zoom levels (40%, 20%) instead of hiding notes completely
+
+### Prompts
+
+95. "would it be possible to store the center point of each note and then use that point to position an icon that would indicate a note?"
+96. "Let's implement the icon idea again, but this time, lets test each step before proceeding. Start with Implementing center point capture."
+97. "continue" (after Step 1 - center point capture logging)
+98. "continue" (after Step 2 - verify center coords retrieved)
+99. "proceed" (after Step 3 - icon visual element created)
+100. "The icons display at the center of the note, but they do not stay anchored to the canvas, they remain in the same place on the screen as the canvas is panned and zoomed."
+101. "rollback the last changes, they were very buggy"
+
+### Implementation Steps (Rolled Back)
+
+**Step 1: Center Point Capture**
+- Added logging for center coordinate capture
+- Verified CenterX__c and CenterY__c were being saved
+- Confirmed center coords in Salesforce payload
+
+**Step 2: Verify Retrieval**
+- Added logging to display function
+- Confirmed center coordinates retrieved from Salesforce
+- Verified coords stored in note element dataset
+
+**Step 3: Create Icon Visual**
+- Created `createNoteIconMarker()` function
+- 32px circular icon with 📝 emoji
+- Teal background, white border, hover animation
+- Initially displayed at fixed position (400, 400) for testing
+
+**Step 4: Position Icon**
+- Added `positionIconMarker()` function
+- Converted SVG center coords to screen position
+- Icons displayed at note center initially
+
+**Step 5: Continuous Updates (FAILED)**
+- Added icon positioning to `updateDisplayedNotePositions()` loop
+- Icons didn't follow canvas properly
+- Multiple bugs: icons duplicating, positioning errors, performance issues
+
+### Issues Encountered
+
+1. **Icons not following canvas** - Stayed fixed on screen during pan/zoom
+2. **Continuous update caused bugs** - Icons behaved erratically
+3. **Performance issues** - Extra DOM manipulations in the loop
+4. **Positioning errors** - Icons jumped around unpredictably
+
+### Rollback Decision
+
+Rolled back to commit `289283e` (before icon implementation) because:
+- Icon positioning was too unstable
+- Multiple attempts to fix caused more issues
+- Current solution (hiding notes at extreme zoom) works well enough
+- Icon approach added complexity without clear benefit
+
+### Lessons Learned
+
+1. **Single-point positioning is not simpler** - Center point still subject to same SVG transformation issues
+2. **Incremental approach was good** - Caught issues early before too much code
+3. **Test thoroughly before expanding** - Icon following canvas should have been verified before adding continuous updates
+4. **Know when to cut losses** - Rolled back rather than continuing to debug
+
+### Current State After Rollback
+
+Back to stable version with:
+- ✅ Notes display normally at 50%-100% zoom
+- ✅ Notes hidden at 40% and 20% zoom (to prevent coordinate jump)
+- ✅ Center coordinates still being saved (for potential future use)
+- ✅ All other features working correctly
+
+### Commits in This Session
+
+- `a411efb` - Step 1: Add debug logging for center point capture
+- `51a5bb0` - Step 2: Add logging to verify center coords retrieved
+- `dc5dfe1` - Step 3: Create icon marker visual element
+- `361f97d` - Step 4: Position icon using center coordinates
+- `e467d1b` - Fix: Make icons follow canvas (BUGGY)
+- **ROLLED BACK TO** `289283e` - Stable version
+
+### Alternative Approaches Considered
+
+1. **Keep icon approach but simplify** - Decided against, core issue remained
+2. **Try different zoom threshold** - Wouldn't fix positioning bugs
+3. **Accept current solution** - ✅ **CHOSEN** - Hiding notes at extreme zoom is acceptable
+
+**Result:** Returned to stable state, icon idea abandoned
+
+---
+
 **End of Development History — MVP Complete! 🎉**
