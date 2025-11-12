@@ -1437,11 +1437,17 @@ function updateDisplayedNotePositions() {
 		if (isExtremeZoom) {
 			// Hide rectangles at extreme zoom
 			rect.style.display = "none";
+			console.log("[FlowNotes] Rectangle hidden at extreme zoom:", currentScale);
 		} else {
 			// Show and update position at normal zoom
 			rect.style.display = "";
 			updateRectanglePosition(rect);
 		}
+	}
+	
+	// Debug: log rectangle count and scale
+	if (rectangles.length > 0) {
+		console.log("[FlowNotes] Update loop - rectangles:", rectangles.length, "scale:", currentScale, "extreme:", isExtremeZoom);
 	}
 }
 
