@@ -1711,6 +1711,8 @@ function createPermanentRectangle(noteOrDataset) {
 	const noteId = noteOrDataset.dataset.noteId || noteOrDataset.id;
 	rect.dataset.noteId = noteId;
 	
+	console.log("[FlowNotes] Creating rectangle element with noteId:", noteId);
+	
 	// Store SVG coordinates in rectangle's dataset for repositioning
 	rect.dataset.rectTLX = rectTLX;
 	rect.dataset.rectTLY = rectTLY;
@@ -1774,11 +1776,19 @@ function updateRectanglePosition(rect) {
 	const width = Math.abs(topRight.x - topLeft.x);
 	const height = Math.abs(bottomLeft.y - topLeft.y);
 	
+	// Validate dimensions
+	if (width < 1 || height < 1 || !isFinite(width) || !isFinite(height)) {
+		console.warn("[FlowNotes] Invalid rectangle dimensions, skipping update:", { width, height, left, top });
+		return;
+	}
+	
 	// Update position
 	rect.style.left = `${left}px`;
 	rect.style.top = `${top}px`;
 	rect.style.width = `${width}px`;
 	rect.style.height = `${height}px`;
+	
+	console.log("[FlowNotes] Rectangle positioned at:", { left, top, width, height });
 }
 
 /**
