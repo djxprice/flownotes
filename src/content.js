@@ -1221,31 +1221,47 @@ function updateDisplayedNotePositions() {
 			continue;
 		}
 		
-		// Check if position is suspiciously close to (0,0) which often indicates
-		// a coordinate transformation error at extreme zoom levels
-		if (Math.abs(topLeft.x) < 50 && Math.abs(topLeft.y) < 50) {
-			// Check if this is actually correct by comparing with last valid position
-			const lastValidLeft = parseFloat(note.dataset.lastValidLeft);
-			const lastValidTop = parseFloat(note.dataset.lastValidTop);
+		// Get last valid position for comparison
+		const lastValidLeft = parseFloat(note.dataset.lastValidLeft);
+		const lastValidTop = parseFloat(note.dataset.lastValidTop);
+		
+		// Check for suspicious position jumps (coordinate system errors at extreme zoom)
+		if (!isNaN(lastValidLeft) && !isNaN(lastValidTop)) {
+			const distanceMoved = Math.hypot(
+				topLeft.x - lastValidLeft,
+				topLeft.y - lastValidTop
+			);
 			
-			if (!isNaN(lastValidLeft) && !isNaN(lastValidTop)) {
-				// If last position was far from origin, this is suspicious
-				const distanceMoved = Math.hypot(
-					topLeft.x - lastValidLeft,
-					topLeft.y - lastValidTop
-				);
-				
-				// If position suddenly jumped more than 500px toward origin, it's likely wrong
-				if (distanceMoved > 500 && (Math.abs(lastValidLeft) > 100 || Math.abs(lastValidTop) > 100)) {
-					console.warn("[FlowNotes] Suspicious jump to near-origin, preserving last valid:", {
-						computed: { x: topLeft.x, y: topLeft.y },
-						lastValid: { x: lastValidLeft, y: lastValidTop },
-						distanceMoved
-					});
-					// Hide note instead of showing at wrong position
-					note.style.opacity = "0";
-					continue;
-				}
+			// Get current scale to detect extreme zoom
+			const currentScale = getCanvasScale();
+			
+			// If at low scale AND position jumped significantly, it's suspicious
+			// Scale < 0.5 means zoomed out, and jumps > 300px are likely errors
+			if (currentScale < 0.5 && distanceMoved > 300) {
+				console.warn("[FlowNotes] Suspicious position jump at extreme zoom:", {
+					scale: currentScale,
+					computed: { x: topLeft.x, y: topLeft.y },
+					lastValid: { x: lastValidLeft, y: lastValidTop },
+					distanceMoved
+				});
+				// Hide note instead of showing at wrong position
+				note.style.opacity = "0";
+				continue;
+			}
+			
+			// Additional check: if position is in upper-left corner (< 200, 200) 
+			// and last position was elsewhere, this is suspicious
+			if (topLeft.x < 200 && topLeft.y < 200 && 
+			    (Math.abs(lastValidLeft) > 300 || Math.abs(lastValidTop) > 300) &&
+			    distanceMoved > 400) {
+				console.warn("[FlowNotes] Suspicious jump to upper-left corner:", {
+					computed: { x: topLeft.x, y: topLeft.y },
+					lastValid: { x: lastValidLeft, y: lastValidTop },
+					distanceMoved
+				});
+				// Hide note instead of showing at wrong position
+				note.style.opacity = "0";
+				continue;
 			}
 		}
 		
