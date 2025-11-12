@@ -1,107 +1,146 @@
-Prompts to recreate the FlowNotes Chrome extension project from scratch:
+### FlowNotes — Historical Development Prompts
 
-0) Prerequisite: Install Node.js LTS (if npm not found)
-- Windows (winget): winget install --id OpenJS.NodeJS.LTS -e --silent --accept-package-agreements --accept-source-agreements
+**Note:** This project was reset to initial state on November 11, 2025. These prompts document the original development process. All implementation is preserved in branch `backup-before-reset-2025-11-11-175036`.
 
-1) Create a Chrome extension manifest (MV3) named "FlowNotes"
-- Include background service worker at `src/background.js` (type: module)
-- Add action with default popup `src/popup.html`
-- Add options page at `src/options.html`
-- Request permissions: cookies, storage, tabs, activeTab, scripting
-- Host permissions: https://login.salesforce.com/*, https://test.salesforce.com/*, https://*.salesforce.com/*, https://*.force.com/*, https://*.visualforce.com/*, https://*.salesforce-sites.com/*
-- Content script: matches the same Salesforce hosts and loads `src/content.js`
-- Reference icons: assets/icons/icon-16.png, -32, -48, -128
+---
 
-2) Implement background service worker (session piggyback, no Connected App)
-- Find an open Salesforce tab across the supported domains
-- Derive API instance origin from Lightning domains (*.lightning.force.com → *.my.salesforce.com)
-- Try reading `sid` via chrome.cookies.get for candidate URLs (instance origin, current origin, login.salesforce.com)
-- If `sid` found, call /services/data/v60.0/chatter/users/me with Authorization: Bearer <sid>
-- If not, dynamically inject the content script and proxy a same‑origin fetch for the same endpoint
-- Store minimal auth state (instanceUrl, userId) and expose message handlers: getStatus, proxy, logout
+### Session 1: Initial Setup (Original Development)
 
-3) Create the content script
-- `src/content.js` listens for messages { type: 'proxy', request } and performs same‑origin fetch with credentials
-- Responds to { type: 'ping' } to confirm injection
+1. "Create a Chrome extension called FlowNotes with Manifest V3"
+2. "Add session piggyback to read Salesforce session cookie"
+3. "Create background service worker to proxy API calls"
+4. "Add popup UI to check session status"
+5. "Generate extension icons (3 stacked wavy lines)"
 
-4) Create popup UI to connect and display user/org
-- `src/popup.html` with “Check Salesforce Session” and “Clear Cache”
-- `src/popup.js` sends messages to background: getStatus (session detection), logout (clear cached state)
-- Show user name from /services/data/v60.0/chatter/users/me and org domain
+---
 
-5) Create options page to choose Salesforce login domain
-- `src/options.html` radio for Production (login) vs Sandbox (test)
-- Save to chrome.storage.sync key `loginDomain`
+### Session 2: Flow Builder Integration
 
-6) Generate icons with 3 stacked wavy lines
-- Initialize Node project (package.json)
-- Add `pngjs` dependency
-- Write `scripts/generate-icons.js` to draw lines and output PNGs
-- Output files: assets/icons/icon-{16,32,48,128}.png
-- Script: `npm run generate:icons`
-- Combined: `npm install && npm run generate:icons`
+6. "Detect when user is on Flow Builder page"
+7. "Inject a draggable toolbar on the Flow canvas"
+8. "Make toolbar position persist across page loads"
+9. "Add a 'Note+' button to open a note popout window"
 
-7) Load the extension
-- Chrome → Manage Extensions → Enable Developer Mode → Load unpacked → select project root
+---
 
-8) No Connected App required
-- Ensure user is logged into a Salesforce tab; API access must be enabled for the user/profile
-- The extension reads the session cookie and uses it to call REST endpoints
+### Session 3: Note Persistence
 
-9) Use the extension
-- Open a Salesforce tab and sign in → open popup → “Check Salesforce Session”
-- If “No session cookie”: verify Chrome cookie settings and enterprise policies
+10. "Create FlowNote__c custom object in Salesforce"
+11. "Add 'Save & Close' button to save note to Salesforce"
+12. "Handle Field-Level Security issues during save"
+13. "Store note text and Flow ID"
 
-10) Flow canvas toolbar
-- In `src/content.js`, detect Flow Builder pages (URL contains 'flowBuilder.app')
-- Inject a draggable toolbar (with inline styles for CSP safety) with a “Note+” button
-- Persist toolbar position in localStorage and remove it when leaving Flow Builder
-- Default position: near top-left; user can reposition and it will be remembered
+---
 
-11) Note+ popout
-- Implement a click handler for “Note+” that opens a small draggable popout with a textarea
-- Place the popout near the toolbar; include a close (×) button
- - Add “Save & Close” to persist a record via REST:
-   - POST /services/data/v60.0/sobjects/FlowNote__c with fields:
-     - FlowId__c (from URL param flowId)
-     - NoteText__c
-     - PosTop__c, PosLeft__c (from popout position)
-     - CanvasUrl__c (top window URL)
+### Session 4: Note Display
 
-12) Salesforce metadata for persisting notes
-- Create MDAPI package under `salesforce_mdapi/` with:
-  - `objects/FlowNote__c.object`
-  - `package.xml`
-- Fields:
-  - FlowId__c (Text 18, required) — flowId from canvas URL
-  - FlowApiName__c (Text 80) — optional
-  - NoteText__c (Long Text Area) — note body
-  - PosTop__c (Number), PosLeft__c (Number) — popup coordinates (px)
-  - CanvasUrl__c (URL) — optional
-  - TLX__c,TLY__c,TRX__c,TRY__c,BLX__c,BLY__c,BRX__c,BRY__c — four-corner anchors (SVG-local)
-- Deploy via CLI:
-  - sfdx force:mdapi:deploy -d salesforce_mdapi -u <alias> -w -1
+14. "Add 'Display' button to show all notes for current flow"
+15. "Render notes at their saved positions"
+16. "Make displayed notes draggable and editable"
+17. "Add 'Update & Close' for editing existing notes"
 
-13) Display all notes for the current flow
-- Add a “Display” button next to “Note+” on the toolbar
-- Query via REST SOQL: SELECT Id, NoteText__c, PosTop__c, PosLeft__c, CanvasUrl__c FROM FlowNote__c WHERE FlowId__c = '<flowId>' ORDER BY CreatedDate
-- Render each note as a draggable sticky at saved canvas-relative positions; close (×) to dismiss
-- Keep notes anchored while panning/zooming:
-  - Store coordinates relative to the canvas bounding rect
-  - On layout, recompute viewport position using current canvas rect and a uniform scale factor
-  - Hide notes when their anchor is off-screen; show when back in view
+---
 
-10) Initialize version control (Git)
-- Open terminal in project root
-- If needed on Windows: install Git → winget install --id Git.Git -e --silent --accept-package-agreements --accept-source-agreements
-- Initialize repo and commit:
-  - git init
-  - git add -A
-  - git commit -m "Initial commit: FlowNotes Chrome extension (session piggyback)"
-  - git branch -M main
-- Optionally add a remote and push:
-  - git remote add origin <your-remote-url>
-  - git push -u origin main
+### Session 5: Canvas Integration
 
+18. "Make notes stay anchored to Flow canvas when panning"
+19. "Hide notes when their anchor moves off-screen"
+20. "Show notes again when anchor returns to view"
+21. "Scale notes with canvas zoom"
 
+---
 
+### Session 6: Advanced Positioning
+
+22. "Store four-corner SVG-local coordinates for notes"
+23. "Use getScreenCTM() for accurate coordinate mapping"
+24. "Handle iframe offsets for cross-frame positioning"
+25. "Cache note dimensions for consistent sizing"
+
+---
+
+### Session 7: Scaling and Visibility
+
+26. "Implement uniform per-axis scaling"
+27. "Clamp scale values to prevent extreme sizes"
+28. "Fix notes 'going crazy' at extreme zoom levels"
+29. "Replace notes with icons at 40% and 20% zoom"
+
+---
+
+### Session 8: Polish and Debugging
+
+30. "Add 'Hide' button to dismiss all notes"
+31. "Add debug overlay for troubleshooting positioning"
+32. "Create Git tag 'good-2025-11-10' for stable version"
+33. "Update all documentation"
+
+---
+
+### Session 9: Issue Resolution
+
+34. "Fix notes disappearing during canvas pan/zoom"
+35. "Fix notes resizing when canvas moves"
+36. "Preserve last known position when mapping fails"
+37. "Remove icon display at extreme zoom levels"
+
+---
+
+### Session 10: Project Reset (November 11, 2025)
+
+38. "Start this project over (Option 2: Keep structure, reset implementation)"
+39. "Create backup branch: backup-before-reset-2025-11-11-175036"
+40. "Reset content.js to minimal state"
+41. "Reset FlowNote__c to minimal field set"
+42. "Update all documentation for reset state"
+
+---
+
+### Key Learnings
+
+**What Worked Well:**
+- Session piggyback approach (no OAuth needed)
+- Background worker as API proxy
+- SVG coordinate transformation for canvas positioning
+- Chrome storage for persisting scale/size data
+- Shadow DOM for style isolation
+
+**Challenges Encountered:**
+- SVG coordinate mapping across zoom levels
+- Note positioning stability during pan/zoom
+- Frame offsets for cross-iframe rendering
+- Field-Level Security in Salesforce
+- Extreme zoom level handling
+
+**Technical Patterns:**
+- `getScreenCTM()` + `DOMPoint` for coordinate transforms
+- `requestAnimationFrame` for smooth layout updates
+- `MutationObserver` for detecting DOM changes
+- `chrome.runtime.sendMessage` for content ↔ background communication
+- Defensive coding with extensive null checks
+
+---
+
+### Backup Branches
+
+All implementations are preserved:
+- `backup-before-reset-2025-11-11-175036` — Latest full implementation
+- `backup-pre-revert-2025-11-11` — Pre-revert state
+- Tag: `good-2025-11-10` — Last known stable
+
+To review:
+```bash
+git checkout backup-before-reset-2025-11-11-175036
+git log --oneline --all --graph
+```
+
+---
+
+### Starting Fresh
+
+The project is now reset to initial state. You can:
+1. Build features incrementally (recommended for learning)
+2. Restore from backup (quick start)
+3. Cherry-pick specific features from backup
+
+See `RESTART_GUIDE.md` and `NEXT_STEPS.md` for guidance.

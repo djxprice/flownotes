@@ -1,64 +1,148 @@
-### FlowNotes — Restart Guide
+### FlowNotes — Quick Restart Guide
 
-Use this checklist to resume work after a break.
+**Project Status:** Reset to initial state on November 11, 2025
 
-Prerequisites
-- Node.js 18+ and npm
-- Git
+This project has been reset to a minimal starting point while preserving all previous work in backup branches.
 
-Steps
-1) Get the code
+---
 
-```bash
-cd C:\Users\danpr
-git clone https://github.com/djxprice/flownotes.git || cd flownotes && git pull
-cd flownotes
+### Quick context for AI Assistant
+
+When resuming work on this project with an AI assistant, provide:
+
+1. **Project location and purpose:**
+   - "This is the FlowNotes Chrome extension project located at `C:\Users\danpr\flownotes`"
+   - "It's a Manifest V3 Chrome extension that helps users create notes while working in Salesforce Flow Builder"
+
+2. **Current state:**
+   - "The project has been reset to initial state"
+   - "The content script (`src/content.js`) has minimal proxy functionality only"
+   - "The Salesforce metadata (`salesforce_mdapi/objects/FlowNote__c.object`) has minimal field set (FlowId__c, NoteText__c)"
+   - "All previous implementation is backed up in branch `backup-before-reset-2025-11-11-175036`"
+
+3. **Key files to review:**
+   - `README.md` — Project overview and setup instructions
+   - `src/background.js` — Session piggyback and API proxy (complete)
+   - `src/content.js` — Content script (minimal, ready for implementation)
+   - `salesforce_mdapi/objects/FlowNote__c.object` — Custom object definition
+   - `flownotes_prompts.txt` — Historical development steps
+
+4. **Next implementation task:**
+   - Describe what you want to build or implement next
+
+5. **Testing context:**
+   - Share your active Flow Builder URL if applicable
+   - Mention any console errors or unexpected behavior
+   - Describe what worked vs. what didn't
+
+---
+
+### Example restart prompt
+
+```
+I'm working on the FlowNotes Chrome extension at C:\Users\danpr\flownotes. 
+
+The project was recently reset to initial state. Previous implementation is backed up 
+in branch backup-before-reset-2025-11-11-175036.
+
+Current state:
+- Background service worker is complete (session piggyback, API proxy)
+- Content script has minimal proxy functionality only
+- FlowNote__c custom object has minimal fields (FlowId__c, NoteText__c)
+
+I want to [describe your next goal, e.g., "add a toolbar to the Flow Builder canvas" 
+or "implement note creation functionality"].
+
+[Optional: Share Flow Builder URL, console errors, or specific requirements]
 ```
 
-2) Restore dependencies and generate icons
+---
 
+### Available backup branches
+
+All previous implementation is preserved:
+
+1. **`backup-before-reset-2025-11-11-175036`** — Most recent implementation
+   - Full toolbar with Note+, Display, Hide buttons
+   - Complete note persistence and display logic
+   - SVG coordinate mapping for canvas positioning
+   - Scaling and visibility management
+
+2. **`backup-pre-revert-2025-11-11`** — Implementation before last revert
+   
+3. **Tagged version: `good-2025-11-10`** — Last known stable version
+
+To review or restore:
 ```bash
-npm ci || npm install
-npm run generate:icons
+git checkout backup-before-reset-2025-11-11-175036
+# Review the implementation
+git checkout main  # Return to reset state
 ```
 
-3) Load or reload the extension
-- Open Chrome → chrome://extensions
-- Enable “Developer mode” (top-right) if not enabled
-- If FlowNotes is already loaded, click “Reload”
-- Otherwise, click “Load unpacked” and select: C:\Users\danpr\flownotes
+---
 
-4) Verify the Salesforce session
-- Open a logged‑in Salesforce tab (Lightning UI)
-- Click the FlowNotes icon → “Check Salesforce Session”
+### Key technical concepts from previous implementation
 
-5) Verify Flow canvas toolbar
-- Open Flow Builder canvas (URL contains `flowBuilder.app`)
-- A draggable “FlowNotes” toolbar with “Note+” appears (top‑left by default)
-- Drag it to reposition; position persists per domain
+If implementing similar features, these patterns were used:
 
-Giving the assistant full context (when you resume)
-- Share the repo URL: https://github.com/djxprice/flownotes.git
-- Share your active Flow canvas URL (the `flowBuilder.app?...flowId=...` you’re working on)
-- Mention any changes since the last commit and the next action you want (e.g., “tune scaling bounds”)
-- If there’s an error, paste the exact console line(s) from the Flow page
+- **Session Piggybacking:** Background worker reads `sid` cookie, uses as Bearer token
+- **Content Script Proxy:** Same-origin fetch via content script as fallback
+- **Flow Builder Detection:** URL contains `/builder_platform_interaction/flowBuilder.app`
+- **SVG Coordinate Mapping:** Used `getScreenCTM()` and `DOMPoint` for canvas-relative positioning
+- **Frame Handling:** Toolbar renders in top window; handles iframe offsets
+- **Shadow DOM:** Used for style isolation (with light DOM fallback)
+- **Local Storage:** Toolbar position persisted per-domain
+- **Chrome Storage:** Used for canvas scale and note size caching
 
-Where context lives in the repo
-- `README.md` — how FlowNotes works (session piggyback), toolbar, notes, display
-- `RESTART_GUIDE.md` — this quick resume guide
-- `flownotes_prompts.txt` — ordered rebuild prompts
-- `SALESFORCE_METADATA_DEPLOY.md` — how to deploy `FlowNote__c`
-- `NEXT_STEPS.md` — quick checklist and suggested next tasks
+---
 
-Troubleshooting
-- If session not detected: refresh the Salesforce tab and click “Check Salesforce Session” again
-- If the toolbar doesn’t appear on canvas:
-  - Ensure the URL contains `/builder_platform_interaction/flowBuilder.app`
-  - Reload the extension, then reload the canvas page
-  - Check the browser console for `[FlowNotes] Toolbar injected`
+### Files structure
 
-Notes
-- The project uses session piggybacking; no Connected App is required
-- Full rebuild prompts are in `flownotes_prompts.txt`
+```
+flownotes/
+├── manifest.json              # MV3 manifest
+├── src/
+│   ├── background.js         # Service worker (complete)
+│   ├── content.js            # Content script (minimal)
+│   ├── popup.html/css/js     # Extension popup UI
+│   └── options.html/js       # Options page
+├── salesforce_mdapi/
+│   ├── objects/
+│   │   └── FlowNote__c.object  # Custom object (minimal)
+│   └── package.xml
+├── scripts/
+│   └── generate-icons.js     # Icon generator
+├── assets/icons/             # Generated icons
+├── README.md                 # Project documentation
+├── RESTART_GUIDE.md         # This file
+├── SALESFORCE_METADATA_DEPLOY.md
+├── NEXT_STEPS.md
+└── flownotes_prompts.txt    # Historical prompts
+```
 
+---
 
+### Deploying Salesforce metadata
+
+See `SALESFORCE_METADATA_DEPLOY.md` for full instructions.
+
+Quick deploy:
+```bash
+sf project deploy start --source-dir salesforce_mdapi --target-org YourOrgAlias
+```
+
+---
+
+### Running the extension
+
+1. Install dependencies: `npm install`
+2. Generate icons: `npm run generate:icons`
+3. Load in Chrome: chrome://extensions → Load unpacked → select project directory
+4. Open a Salesforce Flow Builder canvas
+5. Implement new features in `src/content.js`
+
+---
+
+### Ready to continue?
+
+The project is now in a clean state, ready for fresh implementation. All previous work is safely backed up. Choose what to build next!

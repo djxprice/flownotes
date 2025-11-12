@@ -14,6 +14,7 @@
 	<enableFeeds>false</enableFeeds>
 	<allowInChatterGroups>false</allowInChatterGroups>
 
+	<!-- Minimal field set - ready for implementation -->
 	<fields>
 		<fullName>FlowId__c</fullName>
 		<label>Flow Id</label>
@@ -23,102 +24,11 @@
 	</fields>
 
 	<fields>
-		<fullName>FlowApiName__c</fullName>
-		<label>Flow API Name</label>
-		<type>Text</type>
-		<length>80</length>
-		<required>false</required>
-	</fields>
-
-	<fields>
 		<fullName>NoteText__c</fullName>
 		<label>Note Text</label>
 		<type>LongTextArea</type>
 		<visibleLines>10</visibleLines>
 		<length>32768</length>
-	</fields>
-
-	<fields>
-		<fullName>PosTop__c</fullName>
-		<label>Popup Top (px)</label>
-		<type>Number</type>
-		<precision>6</precision>
-		<scale>0</scale>
-		<required>false</required>
-	</fields>
-
-	<fields>
-		<fullName>PosLeft__c</fullName>
-		<label>Popup Left (px)</label>
-		<type>Number</type>
-		<precision>6</precision>
-		<scale>0</scale>
-		<required>false</required>
-	</fields>
-
-	<fields>
-		<fullName>CanvasUrl__c</fullName>
-		<label>Canvas URL</label>
-		<type>Url</type>
-		<required>false</required>
-	</fields>
-
-	<!-- Four-corner SVG-local anchors -->
-	<fields>
-		<fullName>TLX__c</fullName>
-		<label>Top Left X (local)</label>
-		<type>Number</type>
-		<precision>18</precision>
-		<scale>5</scale>
-	</fields>
-	<fields>
-		<fullName>TLY__c</fullName>
-		<label>Top Left Y (local)</label>
-		<type>Number</type>
-		<precision>18</precision>
-		<scale>5</scale>
-	</fields>
-	<fields>
-		<fullName>TRX__c</fullName>
-		<label>Top Right X (local)</label>
-		<type>Number</type>
-		<precision>18</precision>
-		<scale>5</scale>
-	</fields>
-	<fields>
-		<fullName>TRY__c</fullName>
-		<label>Top Right Y (local)</label>
-		<type>Number</type>
-		<precision>18</precision>
-		<scale>5</scale>
-	</fields>
-	<fields>
-		<fullName>BLX__c</fullName>
-		<label>Bottom Left X (local)</label>
-		<type>Number</type>
-		<precision>18</precision>
-		<scale>5</scale>
-	</fields>
-	<fields>
-		<fullName>BLY__c</fullName>
-		<label>Bottom Left Y (local)</label>
-		<type>Number</type>
-		<precision>18</precision>
-		<scale>5</scale>
-	</fields>
-	<fields>
-		<fullName>BRX__c</fullName>
-		<label>Bottom Right X (local)</label>
-		<type>Number</type>
-		<precision>18</precision>
-		<scale>5</scale>
-	</fields>
-	<fields>
-		<fullName>BRY__c</fullName>
-		<label>Bottom Right Y (local)</label>
-		<type>Number</type>
-		<precision>18</precision>
-		<scale>5</scale>
 	</fields>
 </CustomObject>
 

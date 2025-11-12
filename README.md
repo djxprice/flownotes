@@ -1,55 +1,32 @@
 ### FlowNotes — Chrome Extension
 
-Capture notes while working in Salesforce. In this mode, FlowNotes piggybacks your existing Salesforce browser session (no Connected App).
+Capture notes while working in Salesforce Flow Builder. FlowNotes piggybacks your existing Salesforce browser session (no Connected App required).
 
-This guide explains how to:
-- How session piggyback works (no Connected App)
-- Install dependencies and generate icons
-- Load the extension in Chrome
-- Troubleshoot common issues
+**Project Status:** Reset to initial state. Ready for fresh implementation.
 
 ---
 
 ### Requirements
 - Chrome (or Chromium-based browser with Manifest V3 support)
 - Node.js 18+ and npm
-- Salesforce org with permissions to create an External Client App
+- Salesforce org with API access enabled for your user
 - Project directory: `C:\Users\danpr\flownotes`
 
 ---
 
 ### 1) How FlowNotes connects (session piggyback)
-- FlowNotes runs as an MV3 extension with a background service worker and a small content script.
+- FlowNotes runs as an MV3 extension with a background service worker and a content script.
 - It detects an open Salesforce tab and reads the Salesforce session cookie via the `cookies` permission.
 - The background fetches Salesforce REST endpoints using the session ID as a Bearer token, so no Connected App or OAuth dance is required.
 - Requirements:
   - You must have a logged-in Salesforce tab open for the target org.
   - The org/session must allow API access for your user.
 
-Notes:
+**Notes:**
 - This approach mirrors tools like Salesforce Inspector: it leverages your current browser session instead of separate OAuth credentials.
 - No Client ID/Connected App is needed in this mode.
 
 ---
-
-### Flow canvas toolbar
-- When you open the Flow Builder canvas (URL contains `flowBuilder.app`), FlowNotes injects a small draggable toolbar on the page.
-- The toolbar shows a “Note+” button (future: open a note panel). You can drag it anywhere; its position is remembered per domain. It defaults near the top-left of the canvas.
-- If you navigate away from Flow Builder, the toolbar removes itself automatically.
-
----
-
-### Notes popout
-- Click “Note+” on the Flow toolbar to open a small popout with a text area.
-- The popout is draggable and can be closed (×). It appears near the toolbar and can be repositioned.
-- “Save & Close” persists the note to Salesforce as a `FlowNote__c` record (fields include `FlowId__c`, `NoteText__c`, `PosTop__c`, `PosLeft__c`, and `CanvasUrl__c`), then closes the popout.
-  - If your profile lacks Field-Level Security to create/update certain fields, the extension will still create the record and then attempt a PATCH for fields that are updateable. Ask an admin to grant create/update FLS on these fields for full functionality.
-
-### Display notes
-- Click “Display” on the Flow toolbar to render all notes (`FlowNote__c`) for the current canvas’s `flowId`.
-- Notes are shown as sticky cards at their saved positions; you can drag and close individual cards.
-- Notes auto-hide when their anchor is off-screen and reappear when it returns.
-- Notes scale with the Flow canvas zoom; positions are stored relative to the canvas for stability across panning/zooming.
 
 ### 2) Configure the Extension
 No Salesforce configuration is required. Ensure the extension has:
@@ -72,10 +49,10 @@ This generates the extension icons (3 stacked, wavy lines) into `assets/icons/`.
 
 ### 4) Load the extension in Chrome
 1. Open Chrome → chrome://extensions
-2. Enable “Developer mode”
-3. Click “Load unpacked”
+2. Enable "Developer mode"
+3. Click "Load unpacked"
 4. Select the project directory: `C:\Users\danpr\flownotes`
-5. Click “Details” on FlowNotes to confirm permissions (cookies + host permissions).
+5. Click "Details" on FlowNotes to confirm permissions (cookies + host permissions).
 
 Reload the extension after any changes.
 
@@ -84,24 +61,24 @@ Reload the extension after any changes.
 ### 5) Use the extension
 1. Click the FlowNotes toolbar icon.
 2. Make sure you have an open, logged-in Salesforce tab.
-3. Click “Check Salesforce Session”.
-4. If a session is detected, you’ll see:
+3. Click "Check Salesforce Session".
+4. If a session is detected, you'll see:
    - User: your name (from Chatter users/me)
-   - Org: your org’s domain (e.g., `my-domain.my.salesforce.com`)
-5. “Clear Cache” only clears FlowNotes’ cached state; it doesn’t sign you out of Salesforce.
+   - Org: your org's domain (e.g., `my-domain.my.salesforce.com`)
+5. "Clear Cache" only clears FlowNotes' cached state; it doesn't sign you out of Salesforce.
 
 FlowNotes works with whichever Salesforce tab is currently open and logged in.
 
 ---
 
 ### Troubleshooting
-- No Salesforce tab / not logged in:
-  - Open a Salesforce tab and sign in, then click “Check Salesforce Session”.
-- Session cookie missing:
+- **No Salesforce tab / not logged in:**
+  - Open a Salesforce tab and sign in, then click "Check Salesforce Session".
+- **Session cookie missing:**
   - Some enterprise policies or browser settings can block cookie access. Ensure standard Chrome cookie behavior for first-party Salesforce pages.
-- API disabled or limited:
+- **API disabled or limited:**
   - Your profile/permission set must allow API access to use REST endpoints.
-- Multiple orgs/tabs:
+- **Multiple orgs/tabs:**
   - FlowNotes uses the first active Salesforce tab. Close others or make the target tab active and try again.
 
 ---
@@ -109,10 +86,12 @@ FlowNotes works with whichever Salesforce tab is currently open and logged in.
 ### Project structure
 - `manifest.json` — Chrome MV3 manifest
 - `src/background.js` — Service worker; detects Salesforce session and proxies API calls
+- `src/content.js` — Content script; ready for Flow Builder UI implementation
 - `src/popup.html|css|js` — Popup UI for connect/disconnect and status
 - `src/options.html|js` — Options to choose Production vs Sandbox
 - `scripts/generate-icons.js` — Icon generator (3 stacked wavy lines)
 - `assets/icons/` — Generated PNG icons (created by the script)
+- `salesforce_mdapi/` — Salesforce metadata for FlowNote__c custom object (minimal field set)
 - `flownotes_prompts.txt` — Prompts/steps to recreate the project
 
 ---
@@ -121,5 +100,19 @@ FlowNotes works with whichever Salesforce tab is currently open and logged in.
 - Host permissions in `manifest.json` include:
   - `https://login.salesforce.com/*`, `https://test.salesforce.com/*`, `https://*.salesforce.com/*`, and `https://*.force.com/*`
 - The extension uses the `cookies` permission to read the Salesforce session cookie (`sid`) for the active Salesforce tab domain.
+- **FlowNote__c** custom object includes:
+  - `FlowId__c` (Text, required) — Flow identifier
+  - `NoteText__c` (LongTextArea) — Note content
 
+---
 
+### Backup Branches
+The full implementation before reset is available in the following branches:
+- `backup-before-reset-2025-11-11-175036` — Most recent implementation
+- `backup-pre-revert-2025-11-11` — Implementation before last revert
+- Tagged version: `good-2025-11-10` — Last known stable version
+
+To restore from backup:
+```bash
+git checkout backup-before-reset-2025-11-11-175036
+```
