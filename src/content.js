@@ -971,7 +971,10 @@ async function displayNotes() {
  * Clear all displayed note popouts
  */
 function clearDisplayedNotes() {
+	// Remove all displayed notes
 	document.querySelectorAll(`.${DISPLAYED_NOTE_CLASS}`).forEach(el => el.remove());
+	// Remove all rectangles
+	document.querySelectorAll(".flownotes-canvas-rectangle").forEach(el => el.remove());
 }
 
 /**
