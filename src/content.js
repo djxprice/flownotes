@@ -1300,10 +1300,12 @@ function updateDisplayedNotePositions() {
 		if (note.dataset.dragging === "1") continue;
 		
 		// Hide notes at extreme zoom (40% and 20%)
+		// But don't hide the new note popout (unsaved note)
 		const currentScale = getCanvasScale();
 		const isExtremeZoom = currentScale < 0.5;
+		const isNewNotePopout = note.id === NOTE_POPOUT_ID;
 		
-		if (isExtremeZoom) {
+		if (isExtremeZoom && !isNewNotePopout) {
 			note.style.opacity = "0";
 			note.style.display = "none";
 			continue;
@@ -1311,6 +1313,7 @@ function updateDisplayedNotePositions() {
 		
 		// Make sure note is visible at normal zoom
 		note.style.display = "";
+		note.style.opacity = "1";
 		
 		// Get stored SVG coordinates
 		const tlx = parseFloat(note.dataset.tlx);
