@@ -1221,21 +1221,8 @@ function updateDisplayedNotePositions() {
 			continue;
 		}
 		
-		// Check if coordinates look suspiciously like upper-left (close to 0,0)
-		// At extreme zoom, valid coords might be far from origin OR the canvas might have shifted
-		const currentScale = getCanvasScale();
-		const isExtremeZoom = currentScale < 0.45; // Below 45% zoom
-		
-		if (isExtremeZoom) {
-			// At extreme zoom, use opacity to hide instead of repositioning
-			// This prevents the "jump to upper left" visual glitch
-			note.style.opacity = "0";
-			console.log("[FlowNotes] Hiding note at extreme zoom level:", currentScale);
-			continue;
-		}
-		
-		// Additional check: if position is very close to (0,0) but we're not at origin,
-		// this might be an invalid conversion
+		// Check if position is suspiciously close to (0,0) which often indicates
+		// a coordinate transformation error at extreme zoom levels
 		if (Math.abs(topLeft.x) < 50 && Math.abs(topLeft.y) < 50) {
 			// Check if this is actually correct by comparing with last valid position
 			const lastValidLeft = parseFloat(note.dataset.lastValidLeft);
@@ -1243,12 +1230,21 @@ function updateDisplayedNotePositions() {
 			
 			if (!isNaN(lastValidLeft) && !isNaN(lastValidTop)) {
 				// If last position was far from origin, this is suspicious
-				if (Math.abs(lastValidLeft) > 100 || Math.abs(lastValidTop) > 100) {
-					console.warn("[FlowNotes] Suspicious near-origin position, preserving last valid:", {
+				const distanceMoved = Math.hypot(
+					topLeft.x - lastValidLeft,
+					topLeft.y - lastValidTop
+				);
+				
+				// If position suddenly jumped more than 500px toward origin, it's likely wrong
+				if (distanceMoved > 500 && (Math.abs(lastValidLeft) > 100 || Math.abs(lastValidTop) > 100)) {
+					console.warn("[FlowNotes] Suspicious jump to near-origin, preserving last valid:", {
 						computed: { x: topLeft.x, y: topLeft.y },
-						lastValid: { x: lastValidLeft, y: lastValidTop }
+						lastValid: { x: lastValidLeft, y: lastValidTop },
+						distanceMoved
 					});
-					continue; // Skip this update, preserve last position
+					// Hide note instead of showing at wrong position
+					note.style.opacity = "0";
+					continue;
 				}
 			}
 		}
@@ -1281,11 +1277,15 @@ function updateDisplayedNotePositions() {
 		note.style.transform = `scale(${clampedScale})`;
 		
 		// Adjust visibility based on scale
+		// Make sure note is visible (might have been hidden by suspicious position detection)
 		if (clampedScale < 0.6) {
 			note.style.opacity = "0.5";
 		} else {
 			note.style.opacity = "1";
 		}
+		
+		// Ensure note is displayed (might have been hidden)
+		note.style.display = "";
 	}
 }
 
