@@ -1404,25 +1404,23 @@ function updateDisplayedNotePositions() {
 	}
 	
 	// Update all rectangle positions and handle extreme zoom
-	const currentScale = getCanvasScale();
-	const isExtremeZoom = currentScale < 0.5; // 40% and 20% zoom
-	
 	const rectangles = document.querySelectorAll(".flownotes-canvas-rectangle");
-	for (const rect of rectangles) {
-		if (isExtremeZoom) {
-			// Hide rectangles at extreme zoom
-			rect.style.display = "none";
-			console.log("[FlowNotes] Rectangle hidden at extreme zoom:", currentScale);
-		} else {
-			// Show and update position at normal zoom
-			rect.style.display = "";
-			updateRectanglePosition(rect);
-		}
-	}
-	
-	// Debug: log rectangle count and scale
 	if (rectangles.length > 0) {
+		const currentScale = getCanvasScale();
+		const isExtremeZoom = currentScale < 0.5; // 40% and 20% zoom
+		
 		console.log("[FlowNotes] Update loop - rectangles:", rectangles.length, "scale:", currentScale, "extreme:", isExtremeZoom);
+		
+		for (const rect of rectangles) {
+			if (isExtremeZoom) {
+				// Hide rectangles at extreme zoom
+				rect.style.display = "none";
+			} else {
+				// Show and update position at normal zoom
+				rect.style.display = "";
+				updateRectanglePosition(rect);
+			}
+		}
 	}
 }
 
