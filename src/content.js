@@ -1343,7 +1343,10 @@ function updateDisplayedNotePositions() {
 		const lastValidTop = parseFloat(note.dataset.lastValidTop);
 		
 		// Check for suspicious position jumps (coordinate system errors at extreme zoom)
-		if (!isNaN(lastValidLeft) && !isNaN(lastValidTop)) {
+		// Skip this check for unsaved notes (they don't have noteId)
+		const isUnsavedNote = note.id === NOTE_POPOUT_ID;
+		
+		if (!isUnsavedNote && !isNaN(lastValidLeft) && !isNaN(lastValidTop)) {
 			const distanceMoved = Math.hypot(
 				topLeft.x - lastValidLeft,
 				topLeft.y - lastValidTop
