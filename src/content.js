@@ -1335,6 +1335,12 @@ function updateDisplayedNotePositions() {
 		// Ensure note is displayed (might have been hidden)
 		note.style.display = "";
 	}
+	
+	// Update all rectangle positions
+	const rectangles = document.querySelectorAll(".flownotes-canvas-rectangle");
+	for (const rect of rectangles) {
+		updateRectanglePosition(rect);
+	}
 }
 
 /**
@@ -1373,7 +1379,12 @@ function startDrawingMode(notePopout) {
 	}
 	
 	// Change cursor to crosshair for entire document
-	document.body.style.cursor = "crosshair";
+	document.body.style.cursor = "crosshair !important";
+	// Also add a style element to override canvas cursor
+	const cursorStyle = document.createElement("style");
+	cursorStyle.id = "flownotes-drawing-cursor";
+	cursorStyle.textContent = "* { cursor: crosshair !important; }";
+	document.head.appendChild(cursorStyle);
 	
 	// Show instructions
 	showToast("Click on the canvas to set the first corner");
@@ -1542,7 +1553,107 @@ function finalizeRectangle(startX, startY, endX, endY, notePopout) {
 		bottomRight: bottomRightSVG
 	});
 	
+	// Create a permanent rectangle element on the canvas
+	createPermanentRectangle(notePopout);
+	
 	showToast("Rectangle drawn! Save the note to persist it.");
+}
+
+/**
+ * Create a permanent rectangle element that follows canvas pan/zoom
+ */
+function createPermanentRectangle(noteOrDataset) {
+	// Get rectangle SVG coordinates from dataset
+	const rectTLX = parseFloat(noteOrDataset.dataset.rectTLX);
+	const rectTLY = parseFloat(noteOrDataset.dataset.rectTLY);
+	const rectTRX = parseFloat(noteOrDataset.dataset.rectTRX);
+	const rectTRY = parseFloat(noteOrDataset.dataset.rectTRY);
+	const rectBLX = parseFloat(noteOrDataset.dataset.rectBLX);
+	const rectBLY = parseFloat(noteOrDataset.dataset.rectBLY);
+	const rectBRX = parseFloat(noteOrDataset.dataset.rectBRX);
+	const rectBRY = parseFloat(noteOrDataset.dataset.rectBRY);
+	
+	// Validate coordinates
+	if (isNaN(rectTLX) || isNaN(rectTLY) || isNaN(rectTRX) || isNaN(rectTRY) ||
+	    isNaN(rectBLX) || isNaN(rectBLY) || isNaN(rectBRX) || isNaN(rectBRY)) {
+		console.warn("[FlowNotes] Invalid rectangle coordinates, cannot create rectangle");
+		return null;
+	}
+	
+	// Create rectangle element
+	const rect = document.createElement("div");
+	rect.className = "flownotes-canvas-rectangle";
+	const noteId = noteOrDataset.dataset.noteId || noteOrDataset.id;
+	rect.dataset.noteId = noteId;
+	
+	// Store SVG coordinates in rectangle's dataset for repositioning
+	rect.dataset.rectTLX = rectTLX;
+	rect.dataset.rectTLY = rectTLY;
+	rect.dataset.rectTRX = rectTRX;
+	rect.dataset.rectTRY = rectTRY;
+	rect.dataset.rectBLX = rectBLX;
+	rect.dataset.rectBLY = rectBLY;
+	rect.dataset.rectBRX = rectBRX;
+	rect.dataset.rectBRY = rectBRY;
+	
+	Object.assign(rect.style, {
+		position: "fixed",
+		border: "2px solid #5bc0be",
+		background: "rgba(91, 192, 190, 0.05)",
+		pointerEvents: "none",
+		zIndex: "2147483644" // Below notes but above canvas
+	});
+	
+	document.body.appendChild(rect);
+	
+	// Position it immediately
+	updateRectanglePosition(rect);
+	
+	console.log("[FlowNotes] Permanent rectangle created for note:", noteId);
+	
+	return rect;
+}
+
+/**
+ * Update a single rectangle's position based on SVG coordinates
+ */
+function updateRectanglePosition(rect) {
+	const svg = getFlowCanvasSVG();
+	if (!svg) return;
+	
+	// Get SVG coordinates from dataset
+	const tlx = parseFloat(rect.dataset.rectTLX);
+	const tly = parseFloat(rect.dataset.rectTLY);
+	const trx = parseFloat(rect.dataset.rectTRX);
+	const try_ = parseFloat(rect.dataset.rectTRY);
+	const blx = parseFloat(rect.dataset.rectBLX);
+	const bly = parseFloat(rect.dataset.rectBLY);
+	
+	// Validate
+	if (isNaN(tlx) || isNaN(tly) || isNaN(trx) || isNaN(try_) || isNaN(blx) || isNaN(bly)) {
+		return;
+	}
+	
+	// Convert to screen coordinates
+	const topLeft = svgToScreen(svg, tlx, tly);
+	const topRight = svgToScreen(svg, trx, try_);
+	const bottomLeft = svgToScreen(svg, blx, bly);
+	
+	if (!topLeft || !topRight || !bottomLeft) {
+		return;
+	}
+	
+	// Calculate dimensions
+	const left = topLeft.x;
+	const top = topLeft.y;
+	const width = Math.abs(topRight.x - topLeft.x);
+	const height = Math.abs(bottomLeft.y - topLeft.y);
+	
+	// Update position
+	rect.style.left = `${left}px`;
+	rect.style.top = `${top}px`;
+	rect.style.width = `${width}px`;
+	rect.style.height = `${height}px`;
 }
 
 /**
@@ -1561,6 +1672,10 @@ function cancelDrawingMode() {
 	
 	// Reset cursor
 	document.body.style.cursor = "";
+	const cursorStyle = document.getElementById("flownotes-drawing-cursor");
+	if (cursorStyle) {
+		cursorStyle.remove();
+	}
 	
 	// Clear state
 	drawingState = null;
