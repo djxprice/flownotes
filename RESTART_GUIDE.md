@@ -1,8 +1,8 @@
 ### FlowNotes — Quick Restart Guide
 
-**Project Status:** ✅ MVP Complete (November 11, 2025)
+**Project Status:** ✅ MVP Complete + Rectangle Drawing (November 12, 2025)
 
-All core and advanced features are fully implemented and working.
+All core and advanced features are fully implemented and working, including rectangle drawing.
 
 ---
 
@@ -56,14 +56,16 @@ sf project deploy start --source-dir salesforce_mdapi --target-org YourOrgAlias
 - Zoom scaling with requestAnimationFrame
 - Drag notes to reposition on canvas
 - Notes stay anchored during pan/zoom
-- Smart visibility (fade at extreme zoom)
+- Smart visibility (hide at extreme zoom below 40%)
+- Draw rectangles to highlight element groups
 
 **Technical Implementation:**
-- 10 position fields in FlowNote__c
+- 18 position fields in FlowNote__c (10 for notes, 8 for rectangles)
 - SVG coordinate transformation system
 - Continuous position/scale updates
 - Session cookie piggybacking
-- ~1,300 lines of production code
+- Drawing mode with crosshair cursor
+- ~1,500 lines of production code
 
 ---
 
@@ -82,23 +84,24 @@ canvas with canvas-relative positioning and zoom scaling.
 ### 2. Current State
 
 ```
-Status: MVP Complete (November 11, 2025)
+Status: MVP Complete + Rectangle Drawing (November 12, 2025)
 
 All features working:
 - Toolbar with Note+, Display, Hide buttons
 - Create, edit, delete notes
+- Draw rectangles to highlight element groups
 - Canvas-relative positioning using SVG coordinates
 - Zoom scaling with continuous updates
-- Notes saved to FlowNote__c with 10 position fields
+- Notes saved to FlowNote__c with 18 position fields (10 for notes, 8 for rectangles)
 ```
 
 ### 3. Key Files
 
 ```
 Main implementation:
-- src/content.js (~1,300 lines) - All UI and canvas logic
+- src/content.js (~1,500 lines) - All UI, canvas logic, and rectangle drawing
 - src/background.js - API proxy and session management
-- salesforce_mdapi/objects/FlowNote__c.object - Custom object metadata
+- salesforce_mdapi/objects/FlowNote__c.object - Custom object metadata (18 fields)
 
 Documentation:
 - README.md - Full project overview
@@ -114,7 +117,10 @@ Key technologies:
 - Salesforce REST API (session piggybacking)
 - SVG coordinate transformation (getScreenCTM)
 - requestAnimationFrame for continuous updates
-- FlowNote__c with TLX/TLY/TRX/TRY/BLX/BLY/BRX/BRY/CenterX/CenterY fields
+- FlowNote__c with 18 fields:
+  - Note position: TLX/TLY/TRX/TRY/BLX/BLY/BRX/BRY/CenterX/CenterY
+  - Rectangle position: RectTLX/RectTLY/RectTRX/RectTRY/RectBLX/RectBLY/RectBRX/RectBRY
+- Drawing mode with mouse event handling
 ```
 
 ### 5. What You Need Help With
@@ -332,7 +338,11 @@ Before considering work done:
 - [ ] Can drag notes to reposition
 - [ ] Can edit and update notes
 - [ ] Can delete notes
-- [ ] Hide button works
+- [ ] Hide button works (notes and rectangles)
+- [ ] Can draw rectangles (two-click interface)
+- [ ] Rectangles save and load with notes
+- [ ] Rectangles move and scale with canvas
+- [ ] Rectangles hide at extreme zoom (< 40%)
 - [ ] All buttons have hover effects
 - [ ] Console has no errors
 - [ ] Toast notifications appear
@@ -363,6 +373,8 @@ sf project deploy report --target-org YourOrgAlias
    - TLX__c, TLY__c, TRX__c, TRY__c
    - BLX__c, BLY__c, BRX__c, BRY__c
    - CenterX__c, CenterY__c
+   - RectTLX__c, RectTLY__c, RectTRX__c, RectTRY__c
+   - RectBLX__c, RectBLY__c, RectBRX__c, RectBRY__c
 
 3. Check field-level security:
    - Your profile has Read/Edit access to all fields
@@ -399,8 +411,17 @@ System.debug(notes);
 - `screenToSVG(svg, x, y)` — Screen → SVG coordinates
 - `svgToScreen(svg, x, y)` — SVG → Screen coordinates
 - `getCanvasScale()` — Current zoom level
-- `updateDisplayedNotePositions()` — Repositions all notes
+- `updateDisplayedNotePositions()` — Repositions all notes and rectangles
 - `startDisplayedNotesUpdateLoop()` — Starts continuous updates
+
+**Rectangles:**
+- `startDrawingMode(popout)` — Enable crosshair and drawing
+- `handleDrawingClick(e)` — Handle corner clicks
+- `createPreviewRectangle(x, y)` — Live drawing preview
+- `finalizeRectangle(x1, y1, x2, y2, popout)` — Save rectangle
+- `createPermanentRectangle(note)` — Display saved rectangle
+- `updateRectanglePosition(rect)` — Update rectangle position
+- `removeNoteAndRectangle(note)` — Clean up note and rectangle
 
 ### Environment Variables
 
@@ -436,10 +457,10 @@ None - extension uses:
 
 ## Ready to Continue?
 
-The project is in excellent shape! All core features work. Pick an enhancement from `NEXT_STEPS.md` or start using it as-is.
+The project is in excellent shape! All core features work, including rectangle drawing. Pick an enhancement from `NEXT_STEPS.md` or start using it as-is.
 
-**Current commit:** "11 Nov MVP Restore Point"
+**Current commit:** "Rectangle Drawing Feature - Restore Point"
 
-**Status:** ✅ Production-ready MVP
+**Status:** ✅ Production-ready MVP + Rectangle Drawing
 
 🚀 Happy coding!

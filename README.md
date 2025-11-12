@@ -2,7 +2,7 @@
 
 Create and manage notes directly on the Salesforce Flow Builder canvas. FlowNotes piggybacks your existing Salesforce browser session (no Connected App required).
 
-**Project Status:** ✅ MVP Complete - All core and advanced features implemented (November 11, 2025)
+**Project Status:** ✅ MVP Complete - All core and advanced features implemented (November 12, 2025)
 
 ---
 
@@ -23,7 +23,8 @@ Create and manage notes directly on the Salesforce Flow Builder canvas. FlowNote
 - ✅ **SVG Coordinate Mapping** — Precise positioning using getScreenCTM()
 - ✅ **Continuous Updates** — requestAnimationFrame loop for smooth repositioning
 - ✅ **Drag & Reposition** — Drag notes to new canvas positions
-- ✅ **Smart Visibility** — Notes fade at extreme zoom levels
+- ✅ **Smart Visibility** — Notes hide at extreme zoom levels (40% and below)
+- ✅ **Draw Rectangles** — Draw wireframe boxes to highlight groups of canvas elements
 
 ---
 
@@ -65,6 +66,8 @@ The custom object includes:
 - `TLX__c`, `TLY__c`, `TRX__c`, `TRY__c` (Number) — Top corners (SVG coordinates)
 - `BLX__c`, `BLY__c`, `BRX__c`, `BRY__c` (Number) — Bottom corners (SVG coordinates)
 - `CenterX__c`, `CenterY__c` (Number) — Center point (SVG coordinates)
+- `RectTLX__c`, `RectTLY__c`, `RectTRX__c`, `RectTRY__c` (Number) — Rectangle top corners
+- `RectBLX__c`, `RectBLY__c`, `RectBRX__c`, `RectBRY__c` (Number) — Rectangle bottom corners
 
 See `SALESFORCE_METADATA_DEPLOY.md` for detailed deployment instructions.
 
@@ -111,8 +114,9 @@ When you open a Flow Builder page, FlowNotes automatically injects a toolbar wit
 
 - **Note+** — Opens a draggable note creation window
   - Type your note text
+  - Click "📐 Draw" to draw a rectangle on the canvas
   - Click "Save & Close" to persist to Salesforce
-  - Note position is saved in canvas-relative coordinates
+  - Note position and rectangle are saved in canvas-relative coordinates
 
 - **Display** — Shows all notes for the current flow
   - Notes appear at their saved canvas positions
@@ -131,6 +135,7 @@ When you open a Flow Builder page, FlowNotes automatically injects a toolbar wit
    - Click "Note+"
    - Drag the popout to desired position on canvas
    - Type your note text
+   - (Optional) Click "📐 Draw" to draw a rectangle on the canvas
    - Click "Save & Close"
 
 2. **View Notes:**
@@ -154,8 +159,17 @@ When you open a Flow Builder page, FlowNotes automatically injects a toolbar wit
    - Note is removed from Salesforce
 
 6. **Hide All Notes:**
-   - Click "Hide" to dismiss all notes at once
+   - Click "Hide" to dismiss all notes and rectangles at once
    - Click "Display" again to bring them back
+
+7. **Draw Rectangles:**
+   - Click "Note+" to create a new note
+   - Click "📐 Draw" button
+   - First click sets the starting corner
+   - Move mouse to define the rectangle
+   - Second click sets the opposite corner
+   - Press Escape to cancel drawing
+   - Rectangle is saved with the note
 
 ---
 
@@ -206,6 +220,15 @@ saveNote()                  // Create note with canvas position
 updateNote()                // Update existing note
 deleteNote()                // Delete note from Salesforce
 displayNotes()              // Query and display notes
+
+// Rectangle Drawing
+startDrawingMode()          // Enable crosshair cursor and drawing
+handleDrawingClick()        // Handle corner clicks
+createPreviewRectangle()    // Show live preview while drawing
+finalizeRectangle()         // Convert to SVG coords and save
+createPermanentRectangle()  // Display saved rectangle
+updateRectanglePosition()   // Update rectangle with canvas pan/zoom
+removeNoteAndRectangle()    // Clean up note and associated rectangle
 ```
 
 ---
@@ -237,7 +260,17 @@ displayNotes()              // Query and display notes
 
 **Notes too small or too large:**
 - Scaling is clamped between 0.5x and 2.0x
-- At extreme zoom levels, notes will fade (opacity 0.5)
+- At extreme zoom levels (40% and below), notes and rectangles hide automatically
+
+**Rectangles not appearing:**
+- Ensure you clicked twice during drawing (first click = corner, second click = opposite corner)
+- Check browser console for errors
+- Rectangles hide at zoom levels below 40%
+
+**Crosshair cursor not appearing:**
+- Known issue with some canvas styles
+- Drawing still works even if cursor doesn't change
+- First click sets corner, move mouse, second click completes rectangle
 
 ---
 
@@ -287,6 +320,24 @@ flownotes/
 
 ## Version History
 
+### November 12, 2025 — Rectangle Drawing Feature
+
+**New Features:**
+- ✅ Draw rectangles on canvas to highlight element groups
+- ✅ Two-click drawing interface with live preview
+- ✅ Rectangle persistence with SVG coordinates
+- ✅ Rectangles scale and pan with canvas
+- ✅ Rectangles hide at extreme zoom levels (40% and below)
+- ✅ Rectangles removed with notes (Hide, Update, Delete, Close)
+
+**Technical Implementation:**
+- 8 new Salesforce fields for rectangle coordinates
+- Drawing mode with crosshair cursor
+- Live preview during drawing
+- SVG coordinate conversion for rectangles
+- Continuous position updates via requestAnimationFrame
+- Proper cleanup on all note removal paths
+
 ### November 11, 2025 — MVP Complete
 
 **Core Features:**
@@ -304,7 +355,7 @@ flownotes/
 - ✅ Drag notes to reposition on canvas
 
 **Technical Implementation:**
-- 10 new Salesforce fields for position data
+- 10 Salesforce fields for note position data
 - SVG coordinate transformation system
 - requestAnimationFrame update loop
 - ~1,300 lines of production-ready code
