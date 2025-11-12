@@ -1299,6 +1299,19 @@ function updateDisplayedNotePositions() {
 		// Skip if currently dragging
 		if (note.dataset.dragging === "1") continue;
 		
+		// Hide notes at extreme zoom (40% and 20%)
+		const currentScale = getCanvasScale();
+		const isExtremeZoom = currentScale < 0.5;
+		
+		if (isExtremeZoom) {
+			note.style.opacity = "0";
+			note.style.display = "none";
+			continue;
+		}
+		
+		// Make sure note is visible at normal zoom
+		note.style.display = "";
+		
 		// Get stored SVG coordinates
 		const tlx = parseFloat(note.dataset.tlx);
 		const tly = parseFloat(note.dataset.tly);
@@ -1346,48 +1359,7 @@ function updateDisplayedNotePositions() {
 		const lastValidLeft = parseFloat(note.dataset.lastValidLeft);
 		const lastValidTop = parseFloat(note.dataset.lastValidTop);
 		
-		// Check for suspicious position jumps (coordinate system errors at extreme zoom)
-		// Skip this check for unsaved notes (they don't have noteId)
-		const isUnsavedNote = note.id === NOTE_POPOUT_ID;
-		
-		if (!isUnsavedNote && !isNaN(lastValidLeft) && !isNaN(lastValidTop)) {
-			const distanceMoved = Math.hypot(
-				topLeft.x - lastValidLeft,
-				topLeft.y - lastValidTop
-			);
-			
-			// Get current scale to detect extreme zoom
-			const currentScale = getCanvasScale();
-			
-			// If at low scale AND position jumped significantly, it's suspicious
-			// Scale < 0.5 means zoomed out, and jumps > 300px are likely errors
-			if (currentScale < 0.5 && distanceMoved > 300) {
-				console.warn("[FlowNotes] Suspicious position jump at extreme zoom:", {
-					scale: currentScale,
-					computed: { x: topLeft.x, y: topLeft.y },
-					lastValid: { x: lastValidLeft, y: lastValidTop },
-					distanceMoved
-				});
-				// Hide note instead of showing at wrong position
-				note.style.opacity = "0";
-				continue;
-			}
-			
-			// Additional check: if position is in upper-left corner (< 200, 200) 
-			// and last position was elsewhere, this is suspicious
-			if (topLeft.x < 200 && topLeft.y < 200 && 
-			    (Math.abs(lastValidLeft) > 300 || Math.abs(lastValidTop) > 300) &&
-			    distanceMoved > 400) {
-				console.warn("[FlowNotes] Suspicious jump to upper-left corner:", {
-					computed: { x: topLeft.x, y: topLeft.y },
-					lastValid: { x: lastValidLeft, y: lastValidTop },
-					distanceMoved
-				});
-				// Hide note instead of showing at wrong position
-				note.style.opacity = "0";
-				continue;
-			}
-		}
+		// Note: Suspicious jump detection removed - we now simply hide all notes at extreme zoom
 		
 		// Store last valid position before updating
 		note.dataset.lastValidTop = topLeft.y;
