@@ -1299,10 +1299,10 @@ function updateDisplayedNotePositions() {
 		// Skip if currently dragging
 		if (note.dataset.dragging === "1") continue;
 		
-		// Hide notes at extreme zoom (40% and 20%)
+		// Hide notes at extreme zoom (20% zoom and below)
 		// But don't hide the new note popout (unsaved note)
 		const currentScale = getCanvasScale();
-		const isExtremeZoom = currentScale < 0.5;
+		const isExtremeZoom = currentScale < 0.3; // Adjusted threshold for actual canvas scale
 		const isNewNotePopout = note.id === NOTE_POPOUT_ID;
 		
 		if (isExtremeZoom && !isNewNotePopout) {
@@ -1407,7 +1407,7 @@ function updateDisplayedNotePositions() {
 	const rectangles = document.querySelectorAll(".flownotes-canvas-rectangle");
 	if (rectangles.length > 0) {
 		const currentScale = getCanvasScale();
-		const isExtremeZoom = currentScale < 0.5; // 40% and 20% zoom
+		const isExtremeZoom = currentScale < 0.3; // 20% zoom and below
 		
 		console.log("[FlowNotes] Update loop - rectangles:", rectangles.length, "scale:", currentScale, "extreme:", isExtremeZoom);
 		
