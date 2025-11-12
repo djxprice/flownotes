@@ -247,6 +247,39 @@ function injectToolbar() {
 	
 	toolbar.appendChild(noteButton);
 	
+	// Display button
+	const displayButton = document.createElement("button");
+	displayButton.textContent = "Display";
+	Object.assign(displayButton.style, {
+		all: "unset",
+		padding: "6px 10px",
+		fontSize: "12px",
+		fontWeight: "600",
+		background: "rgba(255, 255, 255, 0.16)",
+		color: "#e6ecf1",
+		borderRadius: "8px",
+		cursor: "pointer",
+		transition: "background 0.2s"
+	});
+	
+	// Hover effect
+	displayButton.addEventListener("mouseenter", () => {
+		displayButton.style.background = "rgba(255, 255, 255, 0.24)";
+	});
+	displayButton.addEventListener("mouseleave", () => {
+		displayButton.style.background = "rgba(255, 255, 255, 0.16)";
+	});
+	
+	// Prevent drag when clicking button
+	displayButton.addEventListener("mousedown", (e) => {
+		e.stopPropagation();
+	});
+	
+	// Display notes on click
+	displayButton.addEventListener("click", displayNotes);
+	
+	toolbar.appendChild(displayButton);
+	
 	// Make toolbar draggable
 	makeDraggable(toolbar);
 	
@@ -547,6 +580,284 @@ function showToast(message) {
 		toast.style.opacity = "0";
 		setTimeout(() => toast.remove(), 300);
 	}, 2500);
+}
+
+// ===================================================================
+// Display Notes
+// ===================================================================
+
+const DISPLAYED_NOTE_CLASS = "flownotes-displayed-note";
+
+/**
+ * Display all notes for the current flow
+ */
+async function displayNotes() {
+	try {
+		// Get Flow ID
+		const flowId = getFlowIdFromUrl();
+		if (!flowId) {
+			alert("Could not determine Flow ID from URL. Please ensure you're on a Flow Builder page.");
+			return;
+		}
+		
+		console.log("[FlowNotes] Fetching notes for flow:", flowId);
+		
+		// Build SOQL query
+		const soql = `SELECT Id, NoteText__c, CreatedDate FROM FlowNote__c WHERE FlowId__c = '${escapeSOQL(flowId)}' ORDER BY CreatedDate DESC`;
+		
+		// Query via background script
+		const response = await chrome.runtime.sendMessage({
+			type: "proxy",
+			path: `/services/data/v60.0/query?q=${encodeURIComponent(soql)}`,
+			method: "GET"
+		});
+		
+		if (!response || !response.ok) {
+			throw new Error(response?.body || response?.error || "Failed to fetch notes");
+		}
+		
+		// Parse response
+		let data = {};
+		try {
+			data = JSON.parse(response.body || "{}");
+		} catch (e) {
+			throw new Error("Failed to parse query response");
+		}
+		
+		const notes = data.records || [];
+		console.log("[FlowNotes] Found notes:", notes.length);
+		
+		if (notes.length === 0) {
+			showToast("No notes found for this flow");
+			return;
+		}
+		
+		// Clear any existing displayed notes
+		clearDisplayedNotes();
+		
+		// Display each note
+		let yOffset = 0;
+		notes.forEach((note, index) => {
+			displayNotePopout(note, yOffset);
+			yOffset += 30; // Stagger notes vertically
+		});
+		
+		showToast(`Displaying ${notes.length} note${notes.length === 1 ? "" : "s"}`);
+		
+	} catch (error) {
+		console.error("[FlowNotes] Failed to display notes:", error);
+		alert(`Failed to display notes: ${error.message}\n\nPlease check the console for details.`);
+	}
+}
+
+/**
+ * Clear all displayed note popouts
+ */
+function clearDisplayedNotes() {
+	document.querySelectorAll(`.${DISPLAYED_NOTE_CLASS}`).forEach(el => el.remove());
+}
+
+/**
+ * Display a single note as a popout
+ */
+function displayNotePopout(note, yOffset = 0) {
+	// Create popout container
+	const popout = document.createElement("div");
+	popout.className = DISPLAYED_NOTE_CLASS;
+	popout.dataset.noteId = note.Id;
+	
+	Object.assign(popout.style, {
+		position: "fixed",
+		top: `${200 + yOffset}px`,
+		left: "100px",
+		zIndex: "2147483646",
+		width: "300px",
+		padding: "8px",
+		background: "rgba(28, 37, 65, 0.98)",
+		color: "#e6ecf1",
+		border: "1px solid rgba(255, 255, 255, 0.12)",
+		borderRadius: "10px",
+		boxShadow: "0 10px 30px rgba(0, 0, 0, 0.35)",
+		backdropFilter: "blur(4px)",
+		fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif"
+	});
+	
+	// Header (with title and close button)
+	const header = document.createElement("div");
+	Object.assign(header.style, {
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "space-between",
+		marginBottom: "8px",
+		cursor: "move"
+	});
+	header.className = "flownotes-drag-handle";
+	
+	const headerTitle = document.createElement("div");
+	headerTitle.textContent = "Note";
+	Object.assign(headerTitle.style, {
+		fontSize: "12px",
+		fontWeight: "600",
+		opacity: "0.9"
+	});
+	
+	const closeButton = document.createElement("button");
+	closeButton.textContent = "×";
+	closeButton.title = "Close";
+	Object.assign(closeButton.style, {
+		all: "unset",
+		width: "22px",
+		height: "22px",
+		lineHeight: "22px",
+		textAlign: "center",
+		fontSize: "18px",
+		borderRadius: "6px",
+		cursor: "pointer",
+		background: "rgba(255, 255, 255, 0.08)",
+		transition: "background 0.2s"
+	});
+	
+	closeButton.addEventListener("mouseenter", () => {
+		closeButton.style.background = "rgba(255, 255, 255, 0.15)";
+	});
+	closeButton.addEventListener("mouseleave", () => {
+		closeButton.style.background = "rgba(255, 255, 255, 0.08)";
+	});
+	closeButton.addEventListener("mousedown", (e) => e.stopPropagation());
+	closeButton.addEventListener("click", () => popout.remove());
+	
+	header.appendChild(headerTitle);
+	header.appendChild(closeButton);
+	
+	// Textarea (editable)
+	const textarea = document.createElement("textarea");
+	textarea.value = note.NoteText__c || "";
+	Object.assign(textarea.style, {
+		width: "100%",
+		height: "120px",
+		padding: "8px",
+		fontSize: "13px",
+		lineHeight: "1.4",
+		border: "1px solid rgba(255, 255, 255, 0.12)",
+		borderRadius: "6px",
+		background: "rgba(12, 18, 32, 0.9)",
+		color: "#e6ecf1",
+		resize: "vertical",
+		boxSizing: "border-box",
+		fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif"
+	});
+	textarea.addEventListener("mousedown", (e) => e.stopPropagation());
+	
+	// Footer with Update & Close button
+	const footer = document.createElement("div");
+	Object.assign(footer.style, {
+		display: "flex",
+		justifyContent: "flex-end",
+		marginTop: "8px"
+	});
+	
+	const updateButton = document.createElement("button");
+	updateButton.textContent = "Update & Close";
+	Object.assign(updateButton.style, {
+		all: "unset",
+		padding: "6px 12px",
+		fontSize: "12px",
+		fontWeight: "600",
+		background: "#5bc0be",
+		color: "#08121f",
+		borderRadius: "8px",
+		cursor: "pointer",
+		transition: "opacity 0.2s"
+	});
+	
+	updateButton.addEventListener("mouseenter", () => {
+		updateButton.style.opacity = "0.85";
+	});
+	updateButton.addEventListener("mouseleave", () => {
+		updateButton.style.opacity = "1";
+	});
+	updateButton.addEventListener("mousedown", (e) => e.stopPropagation());
+	updateButton.addEventListener("click", () => {
+		updateNote(note.Id, textarea.value, popout);
+	});
+	
+	footer.appendChild(updateButton);
+	
+	// Assemble popout
+	popout.appendChild(header);
+	popout.appendChild(textarea);
+	popout.appendChild(footer);
+	
+	// Make popout draggable
+	makeDraggable(popout);
+	
+	// Add to page
+	document.body.appendChild(popout);
+}
+
+/**
+ * Update an existing note in Salesforce
+ */
+async function updateNote(noteId, noteText, popout) {
+	try {
+		// Validate note text
+		const text = (noteText || "").trim();
+		if (!text) {
+			alert("Please enter some text for your note.");
+			return;
+		}
+		
+		console.log("[FlowNotes] Updating note:", noteId);
+		
+		// Disable update button during save
+		const updateButton = popout.querySelector("button");
+		if (updateButton) {
+			updateButton.disabled = true;
+			updateButton.textContent = "Updating...";
+			updateButton.style.opacity = "0.6";
+		}
+		
+		// Update FlowNote__c record via background script
+		const response = await chrome.runtime.sendMessage({
+			type: "proxy",
+			path: `/services/data/v60.0/sobjects/FlowNote__c/${noteId}`,
+			method: "PATCH",
+			body: {
+				NoteText__c: text
+			}
+		});
+		
+		if (!response || !response.ok) {
+			throw new Error(response?.body || response?.error || "Failed to update note");
+		}
+		
+		console.log("[FlowNotes] Note updated successfully");
+		
+		// Close popout
+		popout.remove();
+		
+		// Show success message
+		showToast("Note updated successfully!");
+		
+	} catch (error) {
+		console.error("[FlowNotes] Failed to update note:", error);
+		alert(`Failed to update note: ${error.message}\n\nPlease check the console for details.`);
+		
+		// Re-enable update button
+		const updateButton = popout.querySelector("button");
+		if (updateButton) {
+			updateButton.disabled = false;
+			updateButton.textContent = "Update & Close";
+			updateButton.style.opacity = "1";
+		}
+	}
+}
+
+/**
+ * Escape SOQL string literals
+ */
+function escapeSOQL(value) {
+	return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
 /**
