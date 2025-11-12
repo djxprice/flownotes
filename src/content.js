@@ -554,7 +554,9 @@ function openNotePopout() {
 		closeButton.style.background = "rgba(255, 255, 255, 0.08)";
 	});
 	closeButton.addEventListener("mousedown", (e) => e.stopPropagation());
-	closeButton.addEventListener("click", () => popout.remove());
+	closeButton.addEventListener("click", () => {
+		removeNoteAndRectangle(popout);
+	});
 	
 	header.appendChild(headerTitle);
 	header.appendChild(closeButton);
@@ -839,8 +841,8 @@ async function saveNote(noteText, popout) {
 		
 		console.log("[FlowNotes] Note saved successfully:", result);
 		
-		// Close popout
-		popout.remove();
+		// Close popout and remove any associated rectangle
+		removeNoteAndRectangle(popout);
 		
 		// Show success message
 		showToast("Note saved successfully!");
@@ -1095,7 +1097,9 @@ function displayNotePopout(note, yOffset = 0) {
 		closeButton.style.background = "rgba(255, 255, 255, 0.08)";
 	});
 	closeButton.addEventListener("mousedown", (e) => e.stopPropagation());
-	closeButton.addEventListener("click", () => popout.remove());
+	closeButton.addEventListener("click", () => {
+		removeNoteAndRectangle(popout);
+	});
 	
 	buttonContainer.appendChild(deleteButton);
 	buttonContainer.appendChild(closeButton);
@@ -1230,7 +1234,7 @@ async function updateNote(noteId, noteText, popout) {
 		
 		console.log("[FlowNotes] Note updated successfully");
 		
-		// Close popout
+		// Close popout (rectangle persists for saved notes)
 		popout.remove();
 		
 		// Show success message
@@ -1270,8 +1274,8 @@ async function deleteNote(noteId, popout) {
 		
 		console.log("[FlowNotes] Note deleted successfully");
 		
-		// Close popout
-		popout.remove();
+		// Close popout and remove rectangle
+		removeNoteAndRectangle(popout);
 		
 		// Show success message
 		showToast("Note deleted successfully!");
@@ -1424,10 +1428,20 @@ function updateDisplayedNotePositions() {
 		note.style.display = "";
 	}
 	
-	// Update all rectangle positions
+	// Update all rectangle positions and handle extreme zoom
+	const currentScale = getCanvasScale();
+	const isExtremeZoom = currentScale < 0.5; // 40% and 20% zoom
+	
 	const rectangles = document.querySelectorAll(".flownotes-canvas-rectangle");
 	for (const rect of rectangles) {
-		updateRectanglePosition(rect);
+		if (isExtremeZoom) {
+			// Hide rectangles at extreme zoom
+			rect.style.display = "none";
+		} else {
+			// Show and update position at normal zoom
+			rect.style.display = "";
+			updateRectanglePosition(rect);
+		}
 	}
 }
 
@@ -1447,6 +1461,29 @@ function startDisplayedNotesUpdateLoop() {
  */
 function escapeSOQL(value) {
 	return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+// ===================================================================
+// Note and Rectangle Cleanup
+// ===================================================================
+
+/**
+ * Remove a note and its associated rectangle
+ */
+function removeNoteAndRectangle(noteElement) {
+	const noteId = noteElement.dataset.noteId || noteElement.id;
+	
+	// Find and remove associated rectangle
+	const rectangles = document.querySelectorAll(".flownotes-canvas-rectangle");
+	for (const rect of rectangles) {
+		if (rect.dataset.noteId === noteId) {
+			rect.remove();
+			console.log("[FlowNotes] Rectangle removed for note:", noteId);
+		}
+	}
+	
+	// Remove the note
+	noteElement.remove();
 }
 
 // ===================================================================
