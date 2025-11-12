@@ -91,6 +91,7 @@ function makeDraggable(element) {
 		}
 		
 		isDragging = true;
+		element.dataset.dragging = "1"; // Mark as dragging to skip position updates
 		startX = e.clientX;
 		startY = e.clientY;
 		
@@ -119,12 +120,44 @@ function makeDraggable(element) {
 	function onMouseUp() {
 		if (!isDragging) return;
 		isDragging = false;
+		delete element.dataset.dragging; // Remove dragging marker
 		
 		document.removeEventListener("mousemove", onMouseMove);
 		document.removeEventListener("mouseup", onMouseUp);
 		
-		// Save position
-		saveToolbarPosition(element);
+		// Save position for toolbar
+		if (element.id === TOOLBAR_ID) {
+			saveToolbarPosition(element);
+		}
+		
+		// Update SVG coordinates for displayed notes
+		if (element.classList.contains(DISPLAYED_NOTE_CLASS)) {
+			const svg = getFlowCanvasSVG();
+			if (svg) {
+				const rect = element.getBoundingClientRect();
+				const topLeft = screenToSVG(svg, rect.left, rect.top);
+				const topRight = screenToSVG(svg, rect.right, rect.top);
+				const bottomLeft = screenToSVG(svg, rect.left, rect.bottom);
+				
+				if (topLeft && topRight && bottomLeft) {
+					element.dataset.tlx = topLeft.x;
+					element.dataset.tly = topLeft.y;
+					element.dataset.trx = topRight.x;
+					element.dataset.try = topRight.y;
+					element.dataset.blx = bottomLeft.x;
+					element.dataset.bly = bottomLeft.y;
+					
+					// Calculate and store center
+					const centerX = (rect.left + rect.right) / 2;
+					const centerY = (rect.top + rect.bottom) / 2;
+					const center = screenToSVG(svg, centerX, centerY);
+					if (center) {
+						element.dataset.centerX = center.x;
+						element.dataset.centerY = center.y;
+					}
+				}
+			}
+		}
 	}
 	
 	element.addEventListener("mousedown", onMouseDown);
@@ -280,6 +313,45 @@ function injectToolbar() {
 	
 	toolbar.appendChild(displayButton);
 	
+	// Hide button
+	const hideButton = document.createElement("button");
+	hideButton.textContent = "Hide";
+	Object.assign(hideButton.style, {
+		all: "unset",
+		padding: "6px 10px",
+		fontSize: "12px",
+		fontWeight: "600",
+		background: "rgba(255, 255, 255, 0.08)",
+		color: "#e6ecf1",
+		borderRadius: "8px",
+		cursor: "pointer",
+		transition: "background 0.2s"
+	});
+	
+	// Hover effect
+	hideButton.addEventListener("mouseenter", () => {
+		hideButton.style.background = "rgba(255, 255, 255, 0.16)";
+	});
+	hideButton.addEventListener("mouseleave", () => {
+		hideButton.style.background = "rgba(255, 255, 255, 0.08)";
+	});
+	
+	// Prevent drag when clicking button
+	hideButton.addEventListener("mousedown", (e) => {
+		e.stopPropagation();
+	});
+	
+	// Hide all notes on click
+	hideButton.addEventListener("click", () => {
+		const count = document.querySelectorAll(`.${DISPLAYED_NOTE_CLASS}`).length;
+		clearDisplayedNotes();
+		if (count > 0) {
+			showToast(`Hid ${count} note${count === 1 ? "" : "s"}`);
+		}
+	});
+	
+	toolbar.appendChild(hideButton);
+	
 	// Make toolbar draggable
 	makeDraggable(toolbar);
 	
@@ -300,6 +372,97 @@ function removeToolbar() {
 	if (toolbar) {
 		toolbar.remove();
 		console.log("[FlowNotes] Toolbar removed");
+	}
+}
+
+// ===================================================================
+// SVG Canvas Helper Functions
+// ===================================================================
+
+/**
+ * Find the Flow Builder canvas SVG element
+ */
+function getFlowCanvasSVG() {
+	// The Flow Builder uses a large SVG for the canvas
+	// Find the largest SVG element in the document
+	const svgs = Array.from(document.querySelectorAll("svg"));
+	if (svgs.length === 0) return null;
+	
+	let largest = svgs[0];
+	let largestArea = 0;
+	
+	for (const svg of svgs) {
+		const rect = svg.getBoundingClientRect();
+		const area = rect.width * rect.height;
+		if (area > largestArea) {
+			largestArea = area;
+			largest = svg;
+		}
+	}
+	
+	return largest;
+}
+
+/**
+ * Convert screen coordinates to SVG-local coordinates
+ */
+function screenToSVG(svg, screenX, screenY) {
+	if (!svg || typeof svg.getScreenCTM !== "function") return null;
+	
+	try {
+		const ctm = svg.getScreenCTM();
+		if (!ctm) return null;
+		
+		const inverse = ctm.inverse();
+		const pt = new DOMPoint(screenX, screenY);
+		const transformed = pt.matrixTransform(inverse);
+		
+		return { x: transformed.x, y: transformed.y };
+	} catch (e) {
+		console.warn("[FlowNotes] Failed to convert screen to SVG coords:", e);
+		return null;
+	}
+}
+
+/**
+ * Convert SVG-local coordinates to screen coordinates
+ */
+function svgToScreen(svg, svgX, svgY) {
+	if (!svg || typeof svg.getScreenCTM !== "function") return null;
+	
+	try {
+		const ctm = svg.getScreenCTM();
+		if (!ctm) return null;
+		
+		const pt = new DOMPoint(svgX, svgY);
+		const transformed = pt.matrixTransform(ctm);
+		
+		return { x: transformed.x, y: transformed.y };
+	} catch (e) {
+		console.warn("[FlowNotes] Failed to convert SVG to screen coords:", e);
+		return null;
+	}
+}
+
+/**
+ * Get current canvas scale (zoom level)
+ */
+function getCanvasScale() {
+	const svg = getFlowCanvasSVG();
+	if (!svg || typeof svg.getScreenCTM !== "function") return 1;
+	
+	try {
+		const ctm = svg.getScreenCTM();
+		if (!ctm) return 1;
+		
+		// Scale is the magnitude of the transformation matrix
+		const scaleX = Math.hypot(ctm.a, ctm.b);
+		const scaleY = Math.hypot(ctm.c, ctm.d);
+		
+		// Return average scale
+		return (scaleX + scaleY) / 2;
+	} catch (e) {
+		return 1;
 	}
 }
 
@@ -499,15 +662,73 @@ async function saveNote(noteText, popout) {
 			saveButton.style.opacity = "0.6";
 		}
 		
+		// Get popout position and dimensions
+		const rect = popout.getBoundingClientRect();
+		
+		// Convert screen coordinates to SVG-local coordinates for canvas-relative positioning
+		const svg = getFlowCanvasSVG();
+		let cornerCoords = null;
+		let centerCoords = null;
+		
+		if (svg) {
+			// Convert all four corners to SVG coordinates
+			const topLeft = screenToSVG(svg, rect.left, rect.top);
+			const topRight = screenToSVG(svg, rect.right, rect.top);
+			const bottomLeft = screenToSVG(svg, rect.left, rect.bottom);
+			const bottomRight = screenToSVG(svg, rect.right, rect.bottom);
+			
+			// Calculate center
+			const centerX = (rect.left + rect.right) / 2;
+			const centerY = (rect.top + rect.bottom) / 2;
+			const center = screenToSVG(svg, centerX, centerY);
+			
+			if (topLeft && topRight && bottomLeft && bottomRight && center) {
+				cornerCoords = {
+					TLX__c: Number(topLeft.x.toFixed(5)),
+					TLY__c: Number(topLeft.y.toFixed(5)),
+					TRX__c: Number(topRight.x.toFixed(5)),
+					TRY__c: Number(topRight.y.toFixed(5)),
+					BLX__c: Number(bottomLeft.x.toFixed(5)),
+					BLY__c: Number(bottomLeft.y.toFixed(5)),
+					BRX__c: Number(bottomRight.x.toFixed(5)),
+					BRY__c: Number(bottomRight.y.toFixed(5))
+				};
+				centerCoords = {
+					CenterX__c: Number(center.x.toFixed(5)),
+					CenterY__c: Number(center.y.toFixed(5))
+				};
+				
+				console.log("[FlowNotes] Saved canvas-relative coords:", { cornerCoords, centerCoords });
+			}
+		}
+		
 		// Create FlowNote__c record via background script
+		const payload = {
+			FlowId__c: flowId,
+			NoteText__c: text,
+			...(cornerCoords || {}),
+			...(centerCoords || {})
+		};
+		
+		// Store the base dimensions in chrome.storage for scaling reference
+		const storageKey = `flownotes:dimensions:${flowId}`;
+		try {
+			await chrome.storage.local.set({
+				[storageKey]: {
+					width: rect.width,
+					height: rect.height,
+					scale: getCanvasScale()
+				}
+			});
+		} catch (e) {
+			console.warn("[FlowNotes] Failed to store dimensions:", e);
+		}
+		
 		const response = await chrome.runtime.sendMessage({
 			type: "proxy",
 			path: "/services/data/v60.0/sobjects/FlowNote__c",
 			method: "POST",
-			body: {
-				FlowId__c: flowId,
-				NoteText__c: text
-			}
+			body: payload
 		});
 		
 		if (!response || !response.ok) {
@@ -602,8 +823,8 @@ async function displayNotes() {
 		
 		console.log("[FlowNotes] Fetching notes for flow:", flowId);
 		
-		// Build SOQL query
-		const soql = `SELECT Id, NoteText__c, CreatedDate FROM FlowNote__c WHERE FlowId__c = '${escapeSOQL(flowId)}' ORDER BY CreatedDate DESC`;
+		// Build SOQL query - include all position fields
+		const soql = `SELECT Id, NoteText__c, CreatedDate, TLX__c, TLY__c, TRX__c, TRY__c, BLX__c, BLY__c, BRX__c, BRY__c, CenterX__c, CenterY__c FROM FlowNote__c WHERE FlowId__c = '${escapeSOQL(flowId)}' ORDER BY CreatedDate DESC`;
 		
 		// Query via background script
 		const response = await chrome.runtime.sendMessage({
@@ -666,6 +887,16 @@ function displayNotePopout(note, yOffset = 0) {
 	popout.className = DISPLAYED_NOTE_CLASS;
 	popout.dataset.noteId = note.Id;
 	
+	// Store SVG coordinates for repositioning
+	if (note.TLX__c != null) popout.dataset.tlx = note.TLX__c;
+	if (note.TLY__c != null) popout.dataset.tly = note.TLY__c;
+	if (note.TRX__c != null) popout.dataset.trx = note.TRX__c;
+	if (note.TRY__c != null) popout.dataset.try = note.TRY__c;
+	if (note.BLX__c != null) popout.dataset.blx = note.BLX__c;
+	if (note.BLY__c != null) popout.dataset.bly = note.BLY__c;
+	if (note.CenterX__c != null) popout.dataset.centerX = note.CenterX__c;
+	if (note.CenterY__c != null) popout.dataset.centerY = note.CenterY__c;
+	
 	Object.assign(popout.style, {
 		position: "fixed",
 		top: `${200 + yOffset}px`,
@@ -679,7 +910,8 @@ function displayNotePopout(note, yOffset = 0) {
 		borderRadius: "10px",
 		boxShadow: "0 10px 30px rgba(0, 0, 0, 0.35)",
 		backdropFilter: "blur(4px)",
-		fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif"
+		fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
+		transformOrigin: "top left"
 	});
 	
 	// Header (with title and close button)
@@ -699,6 +931,41 @@ function displayNotePopout(note, yOffset = 0) {
 		fontSize: "12px",
 		fontWeight: "600",
 		opacity: "0.9"
+	});
+	
+	const buttonContainer = document.createElement("div");
+	Object.assign(buttonContainer.style, {
+		display: "flex",
+		gap: "4px"
+	});
+	
+	const deleteButton = document.createElement("button");
+	deleteButton.textContent = "🗑";
+	deleteButton.title = "Delete note";
+	Object.assign(deleteButton.style, {
+		all: "unset",
+		width: "22px",
+		height: "22px",
+		lineHeight: "22px",
+		textAlign: "center",
+		fontSize: "14px",
+		borderRadius: "6px",
+		cursor: "pointer",
+		background: "rgba(255, 77, 77, 0.2)",
+		transition: "background 0.2s"
+	});
+	
+	deleteButton.addEventListener("mouseenter", () => {
+		deleteButton.style.background = "rgba(255, 77, 77, 0.3)";
+	});
+	deleteButton.addEventListener("mouseleave", () => {
+		deleteButton.style.background = "rgba(255, 77, 77, 0.2)";
+	});
+	deleteButton.addEventListener("mousedown", (e) => e.stopPropagation());
+	deleteButton.addEventListener("click", () => {
+		if (confirm("Are you sure you want to delete this note?")) {
+			deleteNote(note.Id, popout);
+		}
 	});
 	
 	const closeButton = document.createElement("button");
@@ -726,8 +993,11 @@ function displayNotePopout(note, yOffset = 0) {
 	closeButton.addEventListener("mousedown", (e) => e.stopPropagation());
 	closeButton.addEventListener("click", () => popout.remove());
 	
+	buttonContainer.appendChild(deleteButton);
+	buttonContainer.appendChild(closeButton);
+	
 	header.appendChild(headerTitle);
-	header.appendChild(closeButton);
+	header.appendChild(buttonContainer);
 	
 	// Textarea (editable)
 	const textarea = document.createElement("textarea");
@@ -854,6 +1124,109 @@ async function updateNote(noteId, noteText, popout) {
 }
 
 /**
+ * Delete a note from Salesforce
+ */
+async function deleteNote(noteId, popout) {
+	try {
+		console.log("[FlowNotes] Deleting note:", noteId);
+		
+		// Delete FlowNote__c record via background script
+		const response = await chrome.runtime.sendMessage({
+			type: "proxy",
+			path: `/services/data/v60.0/sobjects/FlowNote__c/${noteId}`,
+			method: "DELETE"
+		});
+		
+		if (!response || !response.ok) {
+			throw new Error(response?.body || response?.error || "Failed to delete note");
+		}
+		
+		console.log("[FlowNotes] Note deleted successfully");
+		
+		// Close popout
+		popout.remove();
+		
+		// Show success message
+		showToast("Note deleted successfully!");
+		
+	} catch (error) {
+		console.error("[FlowNotes] Failed to delete note:", error);
+		alert(`Failed to delete note: ${error.message}\n\nPlease check the console for details.`);
+	}
+}
+
+/**
+ * Update positions and scales of all displayed notes based on canvas transform
+ */
+function updateDisplayedNotePositions() {
+	const svg = getFlowCanvasSVG();
+	if (!svg) return;
+	
+	const notes = document.querySelectorAll(`.${DISPLAYED_NOTE_CLASS}`);
+	
+	for (const note of notes) {
+		// Skip if currently dragging
+		if (note.dataset.dragging === "1") continue;
+		
+		// Get stored SVG coordinates
+		const tlx = parseFloat(note.dataset.tlx);
+		const tly = parseFloat(note.dataset.tly);
+		const trx = parseFloat(note.dataset.trx);
+		const try_ = parseFloat(note.dataset.try);
+		const blx = parseFloat(note.dataset.blx);
+		const bly = parseFloat(note.dataset.bly);
+		
+		// Convert SVG coordinates to current screen position
+		if (!isNaN(tlx) && !isNaN(tly) && !isNaN(trx) && !isNaN(try_) && !isNaN(blx) && !isNaN(bly)) {
+			const topLeft = svgToScreen(svg, tlx, tly);
+			const topRight = svgToScreen(svg, trx, try_);
+			const bottomLeft = svgToScreen(svg, blx, bly);
+			
+			if (topLeft && topRight && bottomLeft) {
+				// Position at top-left
+				note.style.top = `${topLeft.y}px`;
+				note.style.left = `${topLeft.x}px`;
+				
+				// Calculate width and height from corners
+				const width = Math.abs(topRight.x - topLeft.x);
+				const height = Math.abs(bottomLeft.y - topLeft.y);
+				
+				// Calculate scale factor
+				const baseWidth = 300; // Original width
+				const baseHeight = parseFloat(note.dataset.baseHeight) || 200; // Store this when creating
+				
+				const scaleX = width / baseWidth;
+				const scaleY = height / baseHeight;
+				
+				// Apply uniform scale (use minimum to maintain aspect ratio)
+				const scale = Math.min(scaleX, scaleY);
+				const clampedScale = Math.max(0.5, Math.min(2.0, scale)); // Clamp between 0.5x and 2x
+				
+				note.style.transform = `scale(${clampedScale})`;
+				
+				// Adjust visibility based on scale (hide at very small scales)
+				if (clampedScale < 0.6) {
+					note.style.opacity = "0.5";
+				} else {
+					note.style.opacity = "1";
+				}
+			}
+		}
+	}
+}
+
+/**
+ * Start continuous position/scale updates for displayed notes
+ */
+function startDisplayedNotesUpdateLoop() {
+	function update() {
+		updateDisplayedNotePositions();
+		requestAnimationFrame(update);
+	}
+	requestAnimationFrame(update);
+}
+
+/**
  * Escape SOQL string literals
  */
 function escapeSOQL(value) {
@@ -921,5 +1294,8 @@ setTimeout(() => {
 		injectToolbar();
 	}
 }, 1500);
+
+// Start continuous update loop for displayed notes (canvas-relative positioning + zoom scaling)
+startDisplayedNotesUpdateLoop();
 
 

@@ -14,7 +14,7 @@
 	<enableFeeds>false</enableFeeds>
 	<allowInChatterGroups>false</allowInChatterGroups>
 
-	<!-- Minimal field set - ready for implementation -->
+	<!-- Core fields -->
 	<fields>
 		<fullName>FlowId__c</fullName>
 		<label>Flow Id</label>
@@ -29,6 +29,88 @@
 		<type>LongTextArea</type>
 		<visibleLines>10</visibleLines>
 		<length>32768</length>
+	</fields>
+
+	<!-- Canvas-relative positioning fields (SVG-local coordinates) -->
+	<!-- These store the four corners of the note in SVG coordinate space -->
+	<!-- Top-left corner -->
+	<fields>
+		<fullName>TLX__c</fullName>
+		<label>Top Left X</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+	<fields>
+		<fullName>TLY__c</fullName>
+		<label>Top Left Y</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+
+	<!-- Top-right corner -->
+	<fields>
+		<fullName>TRX__c</fullName>
+		<label>Top Right X</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+	<fields>
+		<fullName>TRY__c</fullName>
+		<label>Top Right Y</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+
+	<!-- Bottom-left corner -->
+	<fields>
+		<fullName>BLX__c</fullName>
+		<label>Bottom Left X</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+	<fields>
+		<fullName>BLY__c</fullName>
+		<label>Bottom Left Y</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+
+	<!-- Bottom-right corner -->
+	<fields>
+		<fullName>BRX__c</fullName>
+		<label>Bottom Right X</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+	<fields>
+		<fullName>BRY__c</fullName>
+		<label>Bottom Right Y</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+
+	<!-- Center point for icon mode at extreme zoom levels -->
+	<fields>
+		<fullName>CenterX__c</fullName>
+		<label>Center X</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
+	</fields>
+	<fields>
+		<fullName>CenterY__c</fullName>
+		<label>Center Y</label>
+		<type>Number</type>
+		<precision>18</precision>
+		<scale>5</scale>
 	</fields>
 </CustomObject>
 
