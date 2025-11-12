@@ -1221,6 +1221,38 @@ function updateDisplayedNotePositions() {
 			continue;
 		}
 		
+		// Check if coordinates look suspiciously like upper-left (close to 0,0)
+		// At extreme zoom, valid coords might be far from origin OR the canvas might have shifted
+		const currentScale = getCanvasScale();
+		const isExtremeZoom = currentScale < 0.45; // Below 45% zoom
+		
+		if (isExtremeZoom) {
+			// At extreme zoom, use opacity to hide instead of repositioning
+			// This prevents the "jump to upper left" visual glitch
+			note.style.opacity = "0";
+			console.log("[FlowNotes] Hiding note at extreme zoom level:", currentScale);
+			continue;
+		}
+		
+		// Additional check: if position is very close to (0,0) but we're not at origin,
+		// this might be an invalid conversion
+		if (Math.abs(topLeft.x) < 50 && Math.abs(topLeft.y) < 50) {
+			// Check if this is actually correct by comparing with last valid position
+			const lastValidLeft = parseFloat(note.dataset.lastValidLeft);
+			const lastValidTop = parseFloat(note.dataset.lastValidTop);
+			
+			if (!isNaN(lastValidLeft) && !isNaN(lastValidTop)) {
+				// If last position was far from origin, this is suspicious
+				if (Math.abs(lastValidLeft) > 100 || Math.abs(lastValidTop) > 100) {
+					console.warn("[FlowNotes] Suspicious near-origin position, preserving last valid:", {
+						computed: { x: topLeft.x, y: topLeft.y },
+						lastValid: { x: lastValidLeft, y: lastValidTop }
+					});
+					continue; // Skip this update, preserve last position
+				}
+			}
+		}
+		
 		// Store last valid position before updating
 		note.dataset.lastValidTop = topLeft.y;
 		note.dataset.lastValidLeft = topLeft.x;
