@@ -1,8 +1,8 @@
 ### FlowNotes — Quick Restart Guide
 
-**Project Status:** ✅ MVP Complete + Rectangle Drawing (November 12, 2025)
+**Project Status:** ✅ MVP Complete + Full Zoom Support (December 6, 2025)
 
-All core and advanced features are fully implemented and working, including rectangle drawing.
+All core and advanced features are fully implemented and working, including rectangle drawing and full zoom support at all levels (100% to 20%).
 
 ---
 
@@ -55,8 +55,9 @@ sf project deploy start --source-dir salesforce_mdapi --target-org YourOrgAlias
 - Canvas-relative positioning (SVG coordinates)
 - Zoom scaling with requestAnimationFrame
 - Drag notes to reposition on canvas
-- Notes stay anchored during pan/zoom
-- Smart visibility (hide at extreme zoom below 40%)
+- Notes stay anchored during pan/zoom at ALL zoom levels
+- Full zoom support (100% to 20%) with dual rendering detection
+- Hover-to-expand for small notes at extreme zoom
 - Draw rectangles to highlight element groups
 
 **Technical Implementation:**
@@ -84,14 +85,15 @@ canvas with canvas-relative positioning and zoom scaling.
 ### 2. Current State
 
 ```
-Status: MVP Complete + Rectangle Drawing (November 12, 2025)
+Status: MVP Complete + Full Zoom Support (December 6, 2025)
 
 All features working:
 - Toolbar with Note+, Display, Hide buttons
 - Create, edit, delete notes
 - Draw rectangles to highlight element groups
-- Canvas-relative positioning using SVG coordinates
-- Zoom scaling with continuous updates
+- Canvas-relative positioning at ALL zoom levels (100% to 20%)
+- Dual rendering detection (SVG at normal zoom, HTML divs at extreme zoom)
+- Hover-to-expand for small notes at extreme zoom
 - Notes saved to FlowNote__c with 18 position fields (10 for notes, 8 for rectangles)
 ```
 
@@ -342,7 +344,9 @@ Before considering work done:
 - [ ] Can draw rectangles (two-click interface)
 - [ ] Rectangles save and load with notes
 - [ ] Rectangles move and scale with canvas
-- [ ] Rectangles hide at extreme zoom (< 40%)
+- [ ] Notes visible at 40% and 20% zoom
+- [ ] Notes follow pan at extreme zoom
+- [ ] Hover expands small notes at extreme zoom
 - [ ] All buttons have hover effects
 - [ ] Console has no errors
 - [ ] Toast notifications appear
@@ -457,10 +461,10 @@ None - extension uses:
 
 ## Ready to Continue?
 
-The project is in excellent shape! All core features work, including rectangle drawing. Pick an enhancement from `NEXT_STEPS.md` or start using it as-is.
+The project is in excellent shape! All core features work, including rectangle drawing and full zoom support. Pick an enhancement from `NEXT_STEPS.md` or start using it as-is.
 
-**Current commit:** "Rectangle Drawing Feature - Restore Point"
+**Current commit:** "Full Zoom Support - Restore Point"
 
-**Status:** ✅ Production-ready MVP + Rectangle Drawing
+**Status:** ✅ Production-ready MVP + Full Zoom Support
 
 🚀 Happy coding!

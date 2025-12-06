@@ -2,7 +2,7 @@
 
 Create and manage notes directly on the Salesforce Flow Builder canvas. FlowNotes piggybacks your existing Salesforce browser session (no Connected App required).
 
-**Project Status:** ✅ MVP Complete - All core and advanced features implemented (November 12, 2025)
+**Project Status:** ✅ MVP Complete - All core and advanced features implemented (December 6, 2025)
 
 ---
 
@@ -23,7 +23,8 @@ Create and manage notes directly on the Salesforce Flow Builder canvas. FlowNote
 - ✅ **SVG Coordinate Mapping** — Precise positioning using getScreenCTM()
 - ✅ **Continuous Updates** — requestAnimationFrame loop for smooth repositioning
 - ✅ **Drag & Reposition** — Drag notes to new canvas positions
-- ✅ **Smart Visibility** — Notes hide at extreme zoom levels (40% and below)
+- ✅ **Full Zoom Support** — Notes visible and functional at all zoom levels (100% to 20%)
+- ✅ **Hover-to-Expand** — Small notes at extreme zoom expand on hover for readability
 - ✅ **Draw Rectangles** — Draw wireframe boxes to highlight groups of canvas elements
 
 ---
@@ -258,14 +259,19 @@ removeNoteAndRectangle()    // Clean up note and associated rectangle
 - Ensure all position fields are deployed (`TLX__c`, `TLY__c`, etc.)
 - Reload the extension and refresh the Flow Builder page
 
-**Notes too small or too large:**
-- Scaling is clamped between 0.5x and 2.0x
-- At extreme zoom levels (40% and below), notes and rectangles hide automatically
+**Notes too small at extreme zoom:**
+- Notes scale down naturally with the canvas (minimum 0.1x)
+- Hover over small notes to expand them for readability
+- Click also expands notes (for touch devices)
+
+**Notes not following pan at 40%/20% zoom:**
+- Ensure extension is reloaded after updates
+- Check browser console for errors
+- Notes track the `.inner-canvas` element at extreme zoom
 
 **Rectangles not appearing:**
 - Ensure you clicked twice during drawing (first click = corner, second click = opposite corner)
 - Check browser console for errors
-- Rectangles hide at zoom levels below 40%
 
 **Crosshair cursor not appearing:**
 - Known issue with some canvas styles
@@ -320,6 +326,21 @@ flownotes/
 
 ## Version History
 
+### December 6, 2025 — Full Zoom Support
+
+**New Features:**
+- ✅ Notes visible and functional at ALL zoom levels (100% down to 20%)
+- ✅ Notes follow canvas pan at extreme zoom (40%, 20%)
+- ✅ Hover-to-expand: small notes expand on hover for readability
+- ✅ Click-to-expand: alternative for touch/accessibility
+
+**Technical Implementation:**
+- Dual rendering mode detection (SVG vs HTML div)
+- At normal zoom (60%+): SVG coordinate conversion
+- At extreme zoom (40%, 20%): tracks `.inner-canvas` div position
+- Automatic pan tracking applies delta to notes/rectangles
+- Scale minimum lowered to 0.1x for natural sizing
+
 ### November 12, 2025 — Rectangle Drawing Feature
 
 **New Features:**
@@ -327,7 +348,6 @@ flownotes/
 - ✅ Two-click drawing interface with live preview
 - ✅ Rectangle persistence with SVG coordinates
 - ✅ Rectangles scale and pan with canvas
-- ✅ Rectangles hide at extreme zoom levels (40% and below)
 - ✅ Rectangles removed with notes (Hide, Update, Delete, Close)
 
 **Technical Implementation:**

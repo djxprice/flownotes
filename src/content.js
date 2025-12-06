@@ -384,13 +384,50 @@ function removeToolbar() {
  */
 function getFlowCanvasSVG() {
 	// The Flow Builder uses a large SVG for the canvas
-	// Find the largest SVG element in the document
+	// Find SVG by multiple strategies since at extreme zoom the main canvas may look different
 	const svgs = Array.from(document.querySelectorAll("svg"));
 	if (svgs.length === 0) return null;
 	
-	let largest = svgs[0];
+	// Strategy 1: Look for SVG with a viewBox (canvas typically has one)
+	// and that's in the main content area (not sidebar)
+	for (const svg of svgs) {
+		const rect = svg.getBoundingClientRect();
+		const viewBox = svg.getAttribute("viewBox");
+		// Canvas SVG is usually large and positioned to the right of the sidebar
+		if (viewBox && rect.width > 200 && rect.left > 150) {
+			return svg;
+		}
+	}
+	
+	// Strategy 2: Find SVG that contains path elements (canvas has flow connectors)
+	for (const svg of svgs) {
+		const rect = svg.getBoundingClientRect();
+		const hasPaths = svg.querySelector("path");
+		if (hasPaths && rect.width > 200 && rect.left > 150) {
+			return svg;
+		}
+	}
+	
+	// Strategy 3: Fallback to largest SVG in the main content area (right of sidebar)
+	let largest = null;
 	let largestArea = 0;
 	
+	for (const svg of svgs) {
+		const rect = svg.getBoundingClientRect();
+		// Skip SVGs in the left sidebar area
+		if (rect.left < 150) continue;
+		
+		const area = rect.width * rect.height;
+		if (area > largestArea) {
+			largestArea = area;
+			largest = svg;
+		}
+	}
+	
+	if (largest) return largest;
+	
+	// Strategy 4: Ultimate fallback - just the largest SVG
+	largestArea = 0;
 	for (const svg of svgs) {
 		const rect = svg.getBoundingClientRect();
 		const area = rect.width * rect.height;
@@ -453,6 +490,7 @@ function svgToScreen(svg, svgX, svgY) {
 		return null;
 	}
 }
+
 
 /**
  * Get current canvas scale (zoom level)
@@ -692,6 +730,9 @@ function openNotePopout() {
 			console.log("[FlowNotes] New note positioned with SVG coordinates");
 		}
 	}
+	
+	// Add hover-to-expand functionality
+	addNoteHoverExpand(popout);
 	
 	// Focus textarea
 	setTimeout(() => textarea.focus(), 0);
@@ -1175,6 +1216,9 @@ function displayNotePopout(note, yOffset = 0) {
 	// Add to page
 	document.body.appendChild(popout);
 	
+	// Add hover-to-expand functionality for readability at extreme zoom
+	addNoteHoverExpand(popout);
+	
 	// Create rectangle if coordinates are present
 	if (note.RectTLX__c != null && note.RectTLY__c != null) {
 		createPermanentRectangle(popout);
@@ -1290,11 +1334,97 @@ async function deleteNote(noteId, popout) {
 }
 
 /**
+ * Add hover-to-expand functionality for notes at extreme zoom
+ * When a note is scaled very small, hovering expands it for readability
+ */
+function addNoteHoverExpand(popout) {
+	// Minimum scale at which hover expansion kicks in
+	const EXPAND_THRESHOLD = 0.6;
+	// Target scale when expanded
+	const EXPANDED_SCALE = 1.0;
+	
+	popout.addEventListener("mouseenter", () => {
+		const currentScale = parseFloat(popout.dataset.currentScale) || 1;
+		
+		// Only expand if the note is scaled below threshold
+		if (currentScale < EXPAND_THRESHOLD) {
+			popout.dataset.expanded = "true";
+			popout.dataset.preExpandScale = currentScale;
+			
+			// Smoothly expand to readable size
+			popout.style.transition = "transform 0.15s ease-out";
+			popout.style.transform = `scale(${EXPANDED_SCALE})`;
+			popout.style.zIndex = "2147483647"; // Bring to front
+			
+			console.log("[FlowNotes] Note expanded from", currentScale, "to", EXPANDED_SCALE);
+		}
+	});
+	
+	popout.addEventListener("mouseleave", () => {
+		if (popout.dataset.expanded === "true") {
+			const preExpandScale = parseFloat(popout.dataset.preExpandScale) || 0.5;
+			
+			popout.dataset.expanded = "false";
+			
+			// Smoothly return to original scale
+			popout.style.transition = "transform 0.15s ease-out";
+			popout.style.transform = `scale(${preExpandScale})`;
+			popout.style.zIndex = "2147483646"; // Return to normal z-index
+			
+			// Clear transition after animation completes
+			setTimeout(() => {
+				popout.style.transition = "";
+			}, 150);
+			
+			console.log("[FlowNotes] Note collapsed back to", preExpandScale);
+		}
+	});
+	
+	// Also expand on click for touch/accessibility
+	popout.addEventListener("click", (e) => {
+		// Don't interfere with button clicks
+		if (e.target.tagName === "BUTTON" || e.target.tagName === "TEXTAREA") return;
+		
+		const currentScale = parseFloat(popout.dataset.currentScale) || 1;
+		
+		if (currentScale < EXPAND_THRESHOLD && popout.dataset.expanded !== "true") {
+			popout.dataset.expanded = "true";
+			popout.dataset.preExpandScale = currentScale;
+			popout.style.transition = "transform 0.15s ease-out";
+			popout.style.transform = `scale(${EXPANDED_SCALE})`;
+			popout.style.zIndex = "2147483647";
+		}
+	});
+}
+
+/**
  * Update positions and scales of all displayed notes based on canvas transform
  */
+// Track the last "normal" scale and CTM for extreme zoom correction
+let lastNormalScale = null;
+let lastNormalCTM = null;
+const EXTREME_ZOOM_THRESHOLD = 0.1; // Scale below this indicates extreme zoom mode
+
 function updateDisplayedNotePositions() {
 	const svg = getFlowCanvasSVG();
 	if (!svg) return;
+	
+	// Get current scale and CTM
+	const currentScale = getCanvasScale();
+	const currentCTM = svg.getScreenCTM();
+	
+	// Track "normal" scale for reference (when not in extreme zoom)
+	if (currentScale >= EXTREME_ZOOM_THRESHOLD) {
+		lastNormalScale = currentScale;
+		lastNormalCTM = currentCTM;
+	}
+	
+	// Detect if we're in extreme zoom mode (Flow Builder switches rendering)
+	const isExtremeZoomMode = currentScale < EXTREME_ZOOM_THRESHOLD;
+	
+	if (isExtremeZoomMode) {
+		console.log("[FlowNotes] Extreme zoom mode detected, scale:", currentScale.toFixed(4));
+	}
 	
 	const notes = document.querySelectorAll(`.${DISPLAYED_NOTE_CLASS}`);
 	
@@ -1302,21 +1432,8 @@ function updateDisplayedNotePositions() {
 		// Skip if currently dragging
 		if (note.dataset.dragging === "1") continue;
 		
-		// Hide notes at extreme zoom (40% zoom and below)
-		// But don't hide the new note popout (unsaved note)
-		const currentScale = getCanvasScale();
-		const isExtremeZoom = currentScale < 0.2; // Adjusted threshold for actual canvas scale
-		const isNewNotePopout = note.id === NOTE_POPOUT_ID;
-		
-		if (isExtremeZoom && !isNewNotePopout) {
-			note.style.opacity = "0";
-			note.style.display = "none";
-			continue;
-		}
-		
-		// Make sure note is visible at normal zoom
+		// Make sure note is visible
 		note.style.display = "";
-		note.style.opacity = "1";
 		
 		// Get stored SVG coordinates
 		const tlx = parseFloat(note.dataset.tlx);
@@ -1361,13 +1478,44 @@ function updateDisplayedNotePositions() {
 			continue;
 		}
 		
-		// Get last valid position for comparison
-		const lastValidLeft = parseFloat(note.dataset.lastValidLeft);
-		const lastValidTop = parseFloat(note.dataset.lastValidTop);
+		// At extreme zoom, use inner-canvas tracking instead of SVG coordinate conversion
+		if (isExtremeZoomMode && note.dataset.lastValidLeft && note.dataset.lastValidTop) {
+			// Find the inner-canvas element that Salesforce uses at extreme zoom
+			const innerCanvas = document.querySelector(".inner-canvas");
+			if (innerCanvas) {
+				const canvasRect = innerCanvas.getBoundingClientRect();
+				
+				// Get previous canvas position
+				const prevCanvasLeft = parseFloat(note.dataset.prevCanvasLeft);
+				const prevCanvasTop = parseFloat(note.dataset.prevCanvasTop);
+				
+				if (!isNaN(prevCanvasLeft) && !isNaN(prevCanvasTop)) {
+					// Calculate how much the canvas moved
+					const deltaX = canvasRect.left - prevCanvasLeft;
+					const deltaY = canvasRect.top - prevCanvasTop;
+					
+					if (Math.abs(deltaX) > 0.5 || Math.abs(deltaY) > 0.5) {
+						// Apply same delta to note position
+						const currentLeft = parseFloat(note.style.left) || 0;
+						const currentTop = parseFloat(note.style.top) || 0;
+						
+						note.style.left = `${currentLeft + deltaX}px`;
+						note.style.top = `${currentTop + deltaY}px`;
+					}
+				}
+				
+				// Store canvas position for next frame
+				note.dataset.prevCanvasLeft = canvasRect.left;
+				note.dataset.prevCanvasTop = canvasRect.top;
+			}
+			continue; // Skip normal positioning at extreme zoom
+		}
 		
-		// Note: Suspicious jump detection removed - we now simply hide all notes at extreme zoom
+		// Clear extreme zoom tracking when at normal zoom
+		delete note.dataset.prevCanvasLeft;
+		delete note.dataset.prevCanvasTop;
 		
-		// Store last valid position before updating
+		// Store last valid position (at normal zoom)
 		note.dataset.lastValidTop = topLeft.y;
 		note.dataset.lastValidLeft = topLeft.x;
 		
@@ -1384,7 +1532,8 @@ function updateDisplayedNotePositions() {
 		
 		// Apply uniform scale (use minimum to maintain aspect ratio)
 		const scale = Math.min(scaleX, scaleY);
-		const clampedScale = Math.max(0.5, Math.min(2.0, scale)); // Clamp between 0.5x and 2x
+		// Allow notes to scale down to 0.1x at extreme zoom, up to 2.0x when zoomed in
+		const clampedScale = Math.max(0.1, Math.min(2.0, scale));
 		
 		// Validate scale is reasonable
 		if (!isFinite(clampedScale) || clampedScale <= 0) {
@@ -1392,37 +1541,57 @@ function updateDisplayedNotePositions() {
 			continue;
 		}
 		
-		note.style.transform = `scale(${clampedScale})`;
+		// Store the current scale for hover expansion logic
+		note.dataset.currentScale = clampedScale;
 		
-		// Adjust visibility based on scale
-		// Make sure note is visible (might have been hidden by suspicious position detection)
-		if (clampedScale < 0.6) {
-			note.style.opacity = "0.5";
-		} else {
-			note.style.opacity = "1";
+		// Only apply scale if not currently expanded via hover
+		if (note.dataset.expanded !== "true") {
+			note.style.transform = `scale(${clampedScale})`;
 		}
 		
-		// Ensure note is displayed (might have been hidden)
-		note.style.display = "";
+		// Keep notes fully visible at all zoom levels
+		note.style.opacity = "1";
 	}
 	
-	// Update all rectangle positions and handle extreme zoom
+	// Update all rectangle positions
 	const rectangles = document.querySelectorAll(".flownotes-canvas-rectangle");
-	if (rectangles.length > 0) {
-		const currentScale = getCanvasScale();
-		const isExtremeZoom = currentScale < 0.2; // 40% zoom and below
+	for (const rect of rectangles) {
+		rect.style.display = "";
+		rect.style.opacity = "1";
 		
-		console.log("[FlowNotes] Update loop - rectangles:", rectangles.length, "scale:", currentScale, "extreme:", isExtremeZoom);
-		
-		for (const rect of rectangles) {
-			if (isExtremeZoom) {
-				// Hide rectangles at extreme zoom
-				rect.style.display = "none";
-			} else {
-				// Show and update position at normal zoom
-				rect.style.display = "";
-				updateRectanglePosition(rect);
+		// At extreme zoom, use inner-canvas tracking for rectangles too
+		if (isExtremeZoomMode && rect.dataset.lastValidLeft && rect.dataset.lastValidTop) {
+			const innerCanvas = document.querySelector(".inner-canvas");
+			if (innerCanvas) {
+				const canvasRect = innerCanvas.getBoundingClientRect();
+				
+				const prevCanvasLeft = parseFloat(rect.dataset.prevCanvasLeft);
+				const prevCanvasTop = parseFloat(rect.dataset.prevCanvasTop);
+				
+				if (!isNaN(prevCanvasLeft) && !isNaN(prevCanvasTop)) {
+					const deltaX = canvasRect.left - prevCanvasLeft;
+					const deltaY = canvasRect.top - prevCanvasTop;
+					
+					if (Math.abs(deltaX) > 0.5 || Math.abs(deltaY) > 0.5) {
+						const currentLeft = parseFloat(rect.style.left) || 0;
+						const currentTop = parseFloat(rect.style.top) || 0;
+						
+						rect.style.left = `${currentLeft + deltaX}px`;
+						rect.style.top = `${currentTop + deltaY}px`;
+					}
+				}
+				
+				rect.dataset.prevCanvasLeft = canvasRect.left;
+				rect.dataset.prevCanvasTop = canvasRect.top;
 			}
+		} else {
+			updateRectanglePosition(rect);
+			// Store position for extreme zoom tracking
+			rect.dataset.lastValidLeft = parseFloat(rect.style.left) || 0;
+			rect.dataset.lastValidTop = parseFloat(rect.style.top) || 0;
+			// Clear extreme zoom tracking when at normal zoom
+			delete rect.dataset.prevCanvasLeft;
+			delete rect.dataset.prevCanvasTop;
 		}
 	}
 }
@@ -1769,8 +1938,6 @@ function updateRectanglePosition(rect) {
 	rect.style.top = `${top}px`;
 	rect.style.width = `${width}px`;
 	rect.style.height = `${height}px`;
-	
-	console.log("[FlowNotes] Rectangle positioned at:", { left, top, width, height });
 }
 
 /**
